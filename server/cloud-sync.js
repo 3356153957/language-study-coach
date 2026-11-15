@@ -30,7 +30,12 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
     const value=await load();
     if(value && (value.version!==1 || typeof value.known!=='object' || typeof value.conflicts!=='object')) throw new AppError('同步配置无法读取，本机学习记录仍然保留。');
     state=value || empty();
-    if(!state.config && defaultConfig) state.config=validateSyncConfig(defaultConfig);
+    if(defaultConfig) {
+      const preset=validateSyncConfig(defaultConfig);
+      if(state.owner && state.owner.project!==preset.url) throw new AppError('同步服务已调整，本机记录仍保留。请联系应用维护者迁移原同步账号。',409);
+      if(state.config?.url!==preset.url && !state.owner) state=empty();
+      state.config=preset;
+    }
     if(state.config) validateSyncConfig(state.config);
   })();
   const persist=async()=>save(structuredClone(state));
@@ -146,12 +151,13 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
   }
   async function status() {
     await init();
-    return {configured:!!state.config,managed:!!defaultConfig && defaultConfig.url===state.config?.url,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,
+    return {configured:!!state.config,managed:!!defaultConfig,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,
       conflicts:Object.values(state.conflicts).map(c=>({kind:c.record.kind,id:c.record.id})),bound:!!state.owner};
   }
   async function perform(name,input={},requestedStop=stopVersion) {
     await init();
     if(name==='configure') {
+      if(defaultConfig) throw new AppError('同步服务由应用统一管理，无需自行配置。',403);
       const config=validateSyncConfig(input);
       if(state.owner && state.owner.project!==config.url) throw new AppError('本机记录已绑定原同步项目，请使用原项目地址。',409);
       state.config=config;state.enabled=false;lastError='';client=null;await persist();

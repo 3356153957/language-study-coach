@@ -18,9 +18,11 @@
 4. 从项目 Connect / API Keys 页面复制 **Project URL** 和 **Publishable Key**（或旧版 `anon` 公开 Key）。不要复制 `Secret Key`、`service_role`、数据库密码或 JWT 签名密钥。公开 Key 配合用户登录令牌和 RLS 使用，见 [官方 Key 说明](https://supabase.com/docs/guides/api/api-keys)。
 5. Supabase 默认发信服务有收件人与速率限制。给其他人使用前配置自己的 SMTP 并测试收件；可参考 [官方 SMTP 说明](https://supabase.com/docs/guides/auth/auth-smtp)。不要因收不到邮件而关闭账号验证或 RLS。
 
-## 现在就连接现有安装
+## 普通用户
 
-在网页或新版 iOS 应用打开「设置 → 云端同步 → 连接同步服务」，填入同一个项目的 URL 和公开 Key。用同一个邮箱获取验证码、登录，查看数据数量后确认开启。每台设备分别开启，AI 服务和密钥也分别配置。同步账号与 ChatGPT / Codex 模型授权独立。
+在已配置服务的网页或新版 iOS 应用打开「设置 → 云端同步」，填写邮箱、输入邮件验证码，查看同步内容后开启即可。项目地址和公开 Key 由维护者统一配置，普通用户页面不再提供服务参数表单。服务尚未配置时明确显示“暂未开放”，仍可本机学习及导出备份。
+
+每台设备使用同一个邮箱登录。AI 服务和密钥分别配置；同步账号与 ChatGPT / Codex 模型授权独立。
 
 ## 发布时让普通用户只填邮箱
 
@@ -31,9 +33,9 @@ VITE_SUPABASE_URL=https://你的项目编号.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=你的公开Key
 ```
 
-重启开发服务；本地打包运行 `npm run ios:sync`。它们是会打进前端包的公开配置，**不能放 Secret Key 或 service_role**。带默认配置的版本隐藏服务配置表单，普通用户直接用邮箱登录。
+重启开发服务；本地打包运行 `npm run ios:sync`。它们是会打进前端包的公开配置，**不能放 Secret Key 或 service_role**。普通用户直接用邮箱登录。带默认配置的版本也会拒绝通过本机配置接口改成其他同步服务；维护者更新同一项目公开 Key 时保留账号和记录。
 
-GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Variables 中使用 `SUPABASE_URL` 与 `SUPABASE_PUBLISHABLE_KEY`，然后重新运行 iOS IPA 工作流。未配置这些变量时，安装包保留手动连接入口。
+GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Variables 中使用 `SUPABASE_URL` 与 `SUPABASE_PUBLISHABLE_KEY`，然后重新运行 iOS IPA 工作流。未配置这些变量时，安装包显示同步暂未开放，用户无需自行设置参数。
 
 ## 同步规则与边界
 
@@ -49,8 +51,10 @@ GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Var
 
 ## 验证情况
 
-目前共 62 项检查通过。`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、批量上传途中暂停、保存失败回滚、登录绑定、令牌刷新与原生请求协议。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
+目前共 63 项本地检查通过。`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、批量上传途中暂停、保存失败回滚、登录绑定、令牌刷新与原生请求协议。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
 
-`node scripts/preview-settings.js` 启动 5183 隔离页面；验证码、云端和邮件均为本地模拟，只验证交互，不访问真实 Supabase，也不使用正式学习记录。402 × 874 手机尺寸下已走通配置、发送验证码、登录、预览、开启和暂停，无横向溢出。截图 `artifacts/cloud-sync-mobile.jpg`。
+`node scripts/preview-settings.js` 启动 5183 隔离页面；验证码、云端和邮件均为本地模拟，只验证交互，不访问真实 Supabase，也不使用正式学习记录。402 × 874 手机尺寸下已走通发送验证码和登录，确认没有项目参数表单、没有横向溢出。新版邮箱入口截图 `artifacts/cloud-sync-email-only.jpg`；前一轮完整预览、开启与暂停截图 `artifacts/cloud-sync-mobile.jpg`。
 
 真实项目部署、收件、真实账号授权及两台实际设备之间的联网同步仍待配置项目后验证。数据库和模拟协议测试通过，不代表这些线上环节已通过。
+
+维护者当前正在接入统一项目，Supabase 控制台尚待本人登录或集成授权；尚未创建真实项目、配置发信服务或验证真实收件。

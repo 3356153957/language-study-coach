@@ -17,7 +17,7 @@ let revision=1;
 const cloud=new Map([['round:qa-cloud',{kind:'round',id:'qa-cloud',payload:exportBackup({sessions:[{...round,id:'qa-cloud'}]}).data.sessions[0],revision}]]);
 const api=await createAPI({directory,modelCall:async()=>{throw new Error('No AI calls in settings QA');},
   codex:{status:async()=>({loggedIn:false,accounts:[]}),close(){}},
-  syncOptions:{schedule:false,authFactory:()=>({auth:{signInWithOtp:async()=>({error:null}),verifyOtp:async()=>({data:{session:{access_token:'qa-only-access',refresh_token:'qa-only-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'qa-user',email:'qa@example.com'}}}})}}),
+  syncOptions:{schedule:false,defaultConfig:{url:'https://testproject.supabase.co',publishableKey:'sb_publishable_qa_only_public_key'},authFactory:()=>({auth:{signInWithOtp:async()=>({error:null}),verifyOtp:async()=>({data:{session:{access_token:'qa-only-access',refresh_token:'qa-only-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'qa-user',email:'qa@example.com'}}}})}}),
     transport:async(url,o)=>{
       if(o.method==='HEAD')return new Response(null,{headers:{'content-range':`0-0/${cloud.size}`}});
       if(url.includes('/rpc/')) {

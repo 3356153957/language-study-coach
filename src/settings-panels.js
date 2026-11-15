@@ -11,10 +11,7 @@ export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button})
     <p>在手机和电脑上用同一个邮箱，接着积累你的学习记录。随时可以暂停。</p>
     ${activity?`<p role="status"><span class="spinner"></span>${esc(activity)}</p>`:''}
     ${s?.lastError?`<p class="sync-warning" role="status">${esc(s.lastError)}</p>`:''}
-    ${!s?.managed?`<details class="sync-setup" ${s && !s.configured?'open':''}><summary>${s?.configured?'同步服务设置':'连接同步服务'}</summary><p class="field-help">首次使用需要一个 Supabase 项目。这里只填写项目 URL 和公开 Key。</p>
-      <form id="sync-config-form"><label>项目 URL<input id="sync-url" name="url" type="url" required placeholder="https://项目编号.supabase.co" value="${esc(f.url || s?.url)}" ${s?.bound?'readonly':''}></label>
-      <label>Publishable Key<input id="sync-key" name="publishableKey" autocomplete="off" required placeholder="sb_publishable_… 或 anon 公开 Key" value="${esc(f.publishableKey)}"></label>
-      <div class="form-actions"><button class="secondary-button" type="submit" ${!s?'disabled':''}>保存服务设置</button></div></form></details>`:''}
+    ${s && !s.configured?'<p class="field-help">云端同步暂未开放，你可以继续在本机学习和导出备份。</p>':''}
     ${s?.configured && !connected?`<form id="sync-login-form"><label>同步邮箱<input id="sync-email" name="email" type="email" autocomplete="email" required value="${esc(f.email || s.email)}" ${s.bound?'readonly':''}></label>
       <div class="form-actions">${button('发送验证码','sync-code','secondary-button')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}"></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
     ${connected?`<p class="sync-account">${esc(s.email)}</p><p class="field-help">同步学习记录、追问、能力画像及学习偏好。API 密钥与 AI 账号授权保留在各自设备。正在做的练习留在原设备，完成后合并到其他设备。</p>

@@ -207,6 +207,22 @@ test('official Supabase SDK OTP and refresh contract works without browser token
   assert.equal(JSON.stringify(await sync.status()).includes('private-rotated'),false);sync.close();
 });
 
+test('managed deployment presets work without user setup, rotate public keys, and reject project changes for a bound account',async()=>{
+  const engine=createEngine({save:async()=>{}});let saved=null;
+  const options={engine,load:async()=>saved,save:async s=>{saved=structuredClone(s);},defaultConfig:config,schedule:false,authFactory:authFactory()};
+  const sync=createCloudSync(options);
+  assert.equal((await sync.status()).configured,true);assert.equal((await sync.status()).managed,true);
+  await assert.rejects(sync.action('configure',{...config,url:'https://otherproject.supabase.co'}),/统一管理/);
+  await sync.action('send-code',{email:'a@example.com'});await sync.action('verify',{email:'a@example.com',code:'123456'});
+  assert.equal(saved.config.url,config.url);
+  const rotated=createCloudSync({...options,defaultConfig:{...config,publishableKey:'sb_publishable_rotated_public_only'}});
+  assert.equal((await rotated.status()).connected,true);await rotated.action('disable');
+  assert.equal(saved.config.publishableKey,'sb_publishable_rotated_public_only');
+  const moved=createCloudSync({...options,defaultConfig:{...config,url:'https://otherproject.supabase.co'}});
+  await assert.rejects(moved.status(),/迁移原同步账号/);
+  assert.equal(saved.owner.project,config.url);sync.close();rotated.close();moved.close();
+});
+
 test('background cloud requests do not block learning; HTTP status never exposes tokens and cross-site sync writes fail',async()=>{
   const directory=await mkdtemp(path.join(tmpdir(),'lsc-sync-http-'));
   let release,entered,hold=false;

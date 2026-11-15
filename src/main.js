@@ -31,7 +31,7 @@ let pendingChat = null, chatScrollToEnd = true, starting = null;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
 let syncStatus=null,syncPreview=null,syncRunning=false;
-const syncFields={url:'',publishableKey:'',email:'',code:''};
+const syncFields={email:'',code:''};
 let planWelcome = false;
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
 try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } catch { /* Replace invalid tab draft. */ }
@@ -458,12 +458,11 @@ app.addEventListener('change', event => {
   if (event.target.id === 'audio-speed') { speed = Number(event.target.value); if (audioState !== 'idle') playAudio(true); }
 });
 app.addEventListener('submit', event => {
-  if(['sync-config-form','sync-login-form'].includes(event.target.id)) {
+  if(event.target.id==='sync-login-form') {
     event.preventDefault();const values=Object.fromEntries(new FormData(event.target));
-    const config=event.target.id==='sync-config-form';
-    return run(config?'正在保存同步服务…':'正在验证邮箱…',async()=>{
-      await syncAction(config?'configure':'verify',values);syncFields.code='';syncFields.publishableKey='';
-      notice=config?'服务设置已保存，请登录同步邮箱。':'邮箱已验证。开启同步前可以先查看数据数量。';
+    return run('正在验证邮箱…',async()=>{
+      await syncAction('verify',values);syncFields.code='';
+      notice='邮箱已验证。开启同步前可以先查看数据数量。';
     });
   }
   if (event.target.id === 'chat-composer') { event.preventDefault(); app.querySelector(`[data-action="${isDiscussing(current(), draft) ? 'send-coach' : 'submit'}"]`)?.click(); return; }
