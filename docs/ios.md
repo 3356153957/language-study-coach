@@ -9,6 +9,7 @@
 - `src/native-client.js` 使用原生 HTTP 请求，HTTPS 地址、禁止自动跳转，连接超时 15 秒、读取超时 60 秒。
 - API 服务支持自动获取、搜索和选择上游模型，也可手动填写；模型列表 GET 连接和读取各限时 15 秒，无需电脑版代理，见 [模型列表](model-discovery.md)。
 - ChatGPT 授权回调完成后会自动返回设置页并刷新账号状态；文字表达多问题按格填写，阅读批改后显示中文译文。
+- 如果 OpenAI 返回 `unsupported_country_region_territory`，App 会显示地区限制和 API Key 回退提示，不会尝试绕过 OpenAI 的地区政策。
 - 设置页提供 GitHub Release 检查更新入口；私有仓库需要用户登录 GitHub 才能打开发布页，应用不会内置访问令牌。
 - `StudyStoragePlugin` 用 AES-GCM 加密 API 配置及学习记录，密钥由本机 Keychain 保存；写文件采用原子替换。不会把个人 `.local` 数据或任何账号凭据打进安装包。
 - 加密记录不参加 iCloud 备份。可选 Supabase 同步已接入，1.3 版内置统一项目配置，用户用邮箱登录后自行开启，见 [云端同步](cloud-sync.md)。也可在设置中导出 JSON，再通过文件导入恢复学习记录。API 密钥和 ChatGPT 授权不随备份迁移，须在目标设备重新配置或登录。卸载前请手动备份。保存失败保留原记录；读取失败不会静默创建空账号。

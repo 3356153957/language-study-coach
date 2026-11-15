@@ -5,12 +5,13 @@ import { createChatGPTAuth, consumeResponseStream } from '../server/chatgpt-auth
 
 const pair=await generateKeyPair('RS256'),jwk={...await exportJWK(pair.publicKey),kid:'test',alg:'RS256',use:'sig'};
 function harness() {
- let saved=null,authURL,invalidNonce=false,invalidAudience=false,denyScope=false,refreshes=0,time=Date.now(),refreshFailure=false;
+ let saved=null,authURL,invalidNonce=false,invalidAudience=false,denyScope=false,unsupportedRegion=false,refreshes=0,time=Date.now(),refreshFailure=false;
  const calls=[];
  const transport=async(url,options={})=>{
   calls.push({url,options});
   if(url.endsWith('jwks.json'))return Response.json({keys:[jwk]});
   if(url.endsWith('/oauth/token')) {
+   if(unsupportedRegion)return Response.json({error:{code:'unsupported_country_region_territory'}},{status:403});
    const p=new URLSearchParams(options.body),refresh=p.get('grant_type')==='refresh_token';
    if(refresh) {refreshes++;if(refreshFailure)return Response.json({error:'invalid_grant'},{status:400});}
    const idToken=await new SignJWT({nonce:invalidNonce?'bad':authURL.searchParams.get('nonce'),email:'learner@example.test'})
@@ -24,8 +25,8 @@ function harness() {
  };
  const create=()=>createChatGPTAuth({load:async()=>saved,save:async s=>{saved=structuredClone(s);},transport,now:()=>time});
  const auth=create();
- return {auth,create,calls,saved:()=>saved,refreshes:()=>refreshes,
-  set invalidNonce(v){invalidNonce=v;},set invalidAudience(v){invalidAudience=v;},set denyScope(v){denyScope=v;},set refreshFailure(v){refreshFailure=v;},advance:()=>{time+=3600*1000;},
+  return {auth,create,calls,saved:()=>saved,refreshes:()=>refreshes,
+  set invalidNonce(v){invalidNonce=v;},set invalidAudience(v){invalidAudience=v;},set denyScope(v){denyScope=v;},set unsupportedRegion(v){unsupportedRegion=v;},set refreshFailure(v){refreshFailure=v;},advance:()=>{time+=3600*1000;},
   async start(accountId){authURL=new URL((await auth.start('http://127.0.0.1:1455/auth/callback',accountId)).url);return authURL;},
   callback(overrides={}){const p=new URLSearchParams({state:authURL.searchParams.get('state'),code:'code',client_id:'issued-client',...overrides});return 'http://127.0.0.1:1455/auth/callback?'+p;},
  };
@@ -43,6 +44,12 @@ test('SIWC registers with PKCE, validates signed identity and scope, persists ho
  assert.equal(body.store,false);assert.equal(body.stream,true);assert.equal(body.instructions,'Return JSON');assert.equal('max_output_tokens' in body,false);
  const host=h.saved().hostId;await h.create().status();assert.equal(h.saved().hostId,host);
  const returning=await h.start(status.activeId);assert.equal(returning.searchParams.get('client_id'),'issued-client');assert.equal(returning.searchParams.has('agent_name_hint'),false);
+});
+
+test('unsupported region returns a clear fallback message',async()=>{
+ const h=harness();await h.start();h.unsupportedRegion=true;
+ await assert.rejects(h.auth.finish(h.callback()),/当前不支持.*地区.*API Key/);
+ assert.equal(h.saved().accounts.length,0);
 });
 
 test('invalid state, issuer audience, nonce and missing plan consent never replace credentials',async()=>{

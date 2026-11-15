@@ -28,7 +28,11 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
   }
   async function tokenRequest(params) {
     const response = await http(`${issuer}/api/accounts/oauth/token`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(params).toString() });
-    if (!response.ok) throw new AppError('ChatGPT 授权已失效或未获批准，请重新登录。', 401);
+    if (!response.ok) {
+      let code=''; try { const details=await response.clone().json(); code=String(details?.error?.code || details?.code || ''); } catch { /* Keep a safe generic message. */ }
+      if (code==='unsupported_country_region_territory') throw new AppError('OpenAI 当前不支持这个网络地区的 ChatGPT 账号授权。请在支持地区使用，或改用 API Key 服务商。',403);
+      throw new AppError('ChatGPT 授权已失效或未获批准，请重新登录。', 401);
+    }
     const t = await response.json();
     if (!t.access_token || !t.refresh_token || !Number.isFinite(t.expires_in) || t.token_type?.toLowerCase() !== 'bearer') throw new AppError('ChatGPT 返回的授权不完整，请重新登录。', 502);
     return t;
@@ -73,7 +77,11 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
     const url = new URL(callbackURL), expected = new URL(attempt.redirectURI);
     if (url.origin !== expected.origin || url.pathname !== expected.pathname || url.searchParams.get('state') !== attempt.state) throw new AppError('授权回调校验失败。', 401);
     pending = null;
-    if (url.searchParams.has('error')) throw new AppError('未授予 ChatGPT 使用权限，可重新登录后批准。', 401);
+    if (url.searchParams.has('error')) {
+      const errorCode=url.searchParams.get('error'), description=url.searchParams.get('error_description') || '';
+      if (errorCode==='unsupported_country_region_territory' || description.includes('unsupported_country_region_territory')) throw new AppError('OpenAI 当前不支持这个网络地区的 ChatGPT 账号授权。请在支持地区使用，或改用 API Key 服务商。',403);
+      throw new AppError('未授予 ChatGPT 使用权限，可重新登录后批准。', 401);
+    }
     const clientId = url.searchParams.get('client_id') || (attempt.clientId !== 'dynamic_agent_client' ? attempt.clientId : '');
     if (!clientId || clientId === 'dynamic_agent_client' || (attempt.clientId !== 'dynamic_agent_client' && attempt.clientId !== clientId)) throw new AppError('ChatGPT 注册标识无效，本次授权未保存。', 401);
     const code = url.searchParams.get('code');
