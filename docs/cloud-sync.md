@@ -47,7 +47,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=你的公开Key
 
 重启开发服务；本地打包运行 `npm run ios:sync`。它们是会打进前端包的公开配置，**不能放 Secret Key 或 service_role**。普通用户直接用邮箱登录。带默认配置的版本也会拒绝通过本机配置接口改成其他同步服务；维护者更新同一项目公开 Key 时保留账号和记录。
 
-GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Variables 中使用 `SUPABASE_URL` 与 `SUPABASE_PUBLISHABLE_KEY`，然后重新运行 iOS IPA 工作流。未配置这些变量时，安装包显示同步暂未开放，用户无需自行设置参数。
+GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Variables 中使用 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY` 与可选的 `TURNSTILE_SITE_KEY`，然后重新运行 iOS IPA 工作流。未配置这些变量时，安装包显示同步暂未开放，用户无需自行设置参数；要强制人机验证，还要在 Supabase Auth CAPTCHA 设置中保存匹配的 Turnstile Secret。
 
 ## 同步规则与边界
 
