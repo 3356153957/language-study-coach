@@ -28,7 +28,7 @@ npm run ios:sync
 
 首次构建记录：[iOS IPA #43720422216](https://github.com/3356153957/language-study-coach/actions/runs/43720422216)。产物已下载到 `build/ios/LanguageStudyCoach-unsigned.ipa`，核验记录位于 `build/ios/verification.json`。包内为 iPhoneOS arm64 应用，最低 iOS 16.0，包含最新听力启动修复。
 
-最新 1.1（build 2）构建：[iOS IPA #43726982243](https://github.com/3356153957/language-study-coach/actions/runs/43726982243)。下载至 `build/ios-v1.1/LanguageStudyCoach-unsigned.ipa`，包含无常驻品牌栏的安全区域适配、ChatGPT 订阅授权和学习数据迁移。53 项检查、Swift 编译和 iPhone 16 Pro 模拟器启动通过；模拟器截图位于 `artifacts/iphone16pro-v1.1/iphone16pro.png`。包内网页资源与本机最终构建逐文件一致，核验记录在同目录 `verification.json`。
+1.1（build 2）构建：[iOS IPA #43726982243](https://github.com/3356153957/language-study-coach/actions/runs/43726982243)。下载至 `build/ios-v1.1/LanguageStudyCoach-unsigned.ipa`，包含无常驻品牌栏的安全区域适配、ChatGPT 订阅授权和学习数据迁移。53 项检查、Swift 编译和 iPhone 16 Pro 模拟器启动通过；模拟器截图位于 `artifacts/iphone16pro-v1.1/iphone16pro.png`。包内网页资源与本机最终构建逐文件一致，核验记录在同目录 `verification.json`。
 
 默认不勾选签名，使用 macOS runner 编译，产物为 `LanguageStudyCoach-unsigned.ipa`。**未签名 IPA 不能直接安装**，用于验证原生编译和后续签名。工作流只上传 IPA，不上传学习记录、证书或配置文件。
 
@@ -61,3 +61,7 @@ iOS 使用系统 Safari 视图与仅监听 `127.0.0.1` 的临时回调，返回�
 ## 云端同步（1.2）
 
 共享同步逻辑已接入 iOS，`cloud-sync.enc` 与 ChatGPT 授权分开加密保存，凭据不会进入学习备份。可以构建时预设公开项目配置，也可以在设置中手动连接。项目创建、邮件模板、SMTP 和跨设备验证见 [配置说明](cloud-sync.md)。当前没有真实 Supabase 项目，联网链路尚未验证。
+
+1.2（build 3）最终构建：[iOS IPA #43731162640](https://github.com/3356153957/language-study-coach/actions/runs/43731162640)，源码 `0c1cf67`，62 项测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.2/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `718cf906d699260c8145e7b83154e8cc67e48679d2e335ec70d9b2131cfade4b`。包内网页资源与使用同样空公开项目配置的本地构建逐字节一致；不包含正式学习数据或授权文件，完整核验见同目录 `verification.json`。
+
+同轮 iPhone 16 Pro 模拟器检查来自 [#43730647096](https://github.com/3356153957/language-study-coach/actions/runs/43730647096)（`9b9a974`），截图位于 `artifacts/iphone16pro-v1.2/iphone16pro.png`；最终补丁只修改同步暂停和合并总量校验，未改原生安全区域和页面布局。真实账号登录、邮件、跨设备联网及签名安装仍未验证。

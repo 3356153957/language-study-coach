@@ -49,7 +49,7 @@ GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Var
 
 ## 验证情况
 
-`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、保存失败回滚、登录绑定、令牌刷新与原生请求协议。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
+目前共 62 项检查通过。`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、批量上传途中暂停、保存失败回滚、登录绑定、令牌刷新与原生请求协议。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
 
 `node scripts/preview-settings.js` 启动 5183 隔离页面；验证码、云端和邮件均为本地模拟，只验证交互，不访问真实 Supabase，也不使用正式学习记录。402 × 874 手机尺寸下已走通配置、发送验证码、登录、预览、开启和暂停，无横向溢出。截图 `artifacts/cloud-sync-mobile.jpg`。
 
