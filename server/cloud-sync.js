@@ -25,7 +25,7 @@ const emailValue=value=>{
 // Learning data and auth use different stores. Auth never leaves this controller.
 export function createCloudSync({load,save,engine,transport=fetch,authFactory=createClient,now=()=>Date.now(),schedule=true,defaultConfig}) {
   let state,initializing,client,clientConfig,queue=Promise.resolve(),timer,closed=false,phase='idle',lastError='',epoch=0;
-  let lastCodeAt=0;
+  let lastCodeAt=0,stopVersion=0;
   const init=()=>initializing ||= (async()=>{
     const value=await load();
     if(value && (value.version!==1 || typeof value.known!=='object' || typeof value.conflicts!=='object')) throw new AppError('同步配置无法读取，本机学习记录仍然保留。');
@@ -107,11 +107,12 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
   }
   async function synchronize() {
     if(!state.enabled || !state.session) return;
-    const started=epoch;phase='syncing';lastError='';
+    const started=epoch,stopAt=stopVersion;phase='syncing';lastError='';
     try {
       // Reconsider preserved conflicts after a manual backup merge.
       await accept(Object.values(state.conflicts).map(c=>c.record));
       for(let page=0;page<500;page++) {
+        if(!state.enabled || stopAt!==stopVersion) break;
         const data=await rest(`lsc_sync_records?select=kind,id,payload,revision&revision=gt.${state.cursor}&order=revision.asc&limit=25`);
         if(!Array.isArray(data) || data.length>25) throw new AppError('云端记录列表无效。');
         const rows=data.map(row);
@@ -122,7 +123,7 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
         if(page===499) throw new AppError('记录较多，请再次同步以继续。');
       }
       for(const local of recordsFromBackup(engine.backup())) {
-        if(!state.enabled) break;
+        if(!state.enabled || stopAt!==stopVersion) break;
         const key=recordKey(local),known=state.known[key];
         if(state.conflicts[key] || known?.hash===await fingerprint(local.payload)) continue;
         const result=await rest('rpc/lsc_sync_apply',{method:'POST',body:{p_kind:local.kind,p_id:local.id,p_payload:local.payload,p_expected:known?.revision || 0}});
@@ -135,7 +136,8 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
         else throw new AppError('云端确认格式无效。');
         await persist();
       }
-      state.lastSync=new Date(now()).toISOString();await persist();phase='idle';
+      if(state.enabled && stopAt===stopVersion) state.lastSync=new Date(now()).toISOString();
+      await persist();phase='idle';
       if(epoch!==started) later(2000);
     } catch(error) {
       phase='error';lastError=error instanceof AppError?error.message:'网络暂不可用，恢复连接后会继续同步。本机记录已保留。';
@@ -147,7 +149,7 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
     return {configured:!!state.config,managed:!!defaultConfig && defaultConfig.url===state.config?.url,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,
       conflicts:Object.values(state.conflicts).map(c=>({kind:c.record.kind,id:c.record.id})),bound:!!state.owner};
   }
-  async function perform(name,input={}) {
+  async function perform(name,input={},requestedStop=stopVersion) {
     await init();
     if(name==='configure') {
       const config=validateSyncConfig(input);
@@ -173,6 +175,7 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
       return {status:await status(),preview:{rounds:d.sessions.length,answers:d.sessions.reduce((n,s)=>n+s.history.length,0),cloudRecords}};
     } else if(name==='enable') {
       if(!state.session || input.confirmed!==true) throw new AppError('请先确认要同步的学习数据。',409);
+      if(requestedStop!==stopVersion) return {status:await status()};
       state.enabled=true;await persist();await synchronize();
     } else if(name==='disable' || name==='logout') {
       state.enabled=false;clearTimeout(timer);
@@ -182,6 +185,12 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
     else throw new AppError('同步操作不存在。',404);
     return {status:await status()};
   }
-  function action(name,input) {const result=queue.then(()=>perform(name,input));queue=result.catch(()=>{});return result;}
+  function action(name,input) {
+    // Pause stops the next network request immediately, even if queued behind a
+    // slow sync. The in-flight request may finish; token removal remains serial.
+    if(name==='disable' || name==='logout') {stopVersion++;if(state)state.enabled=false;clearTimeout(timer);}
+    const requestedStop=stopVersion,result=queue.then(()=>perform(name,input,requestedStop));
+    queue=result.catch(()=>{});return result;
+  }
   return {status,action,notifyChange(){epoch++;later(2000);},close(){closed=true;clearTimeout(timer);}};
 }

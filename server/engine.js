@@ -214,6 +214,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         });
         if(!changes.length) return;
         const draft=mergeCloudRecords(state,changes);
+        exportBackup(draft); // Validate aggregate limits before committing a cloud page.
         await save(draft);state=draft;
       } finally {busy=false;}
     },

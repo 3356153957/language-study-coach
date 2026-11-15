@@ -112,7 +112,7 @@ async function refreshSync() {
   try {syncStatus=await request('sync/status');paintSync();} catch(e) {if(screen==='settings'){error=e.message;render();}}
 }
 async function syncAction(name,input={}) {
-  if(syncRunning) throw new Error('同步正在进行，请稍后重试。');
+  if(syncRunning && !['disable','logout'].includes(name)) throw new Error('同步正在进行，请稍后重试。');
   syncRunning=true;
   try {
     const result=await request(`sync/${name}`,input);

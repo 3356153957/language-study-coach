@@ -143,6 +143,21 @@ test('a cloud write racing after the pull cannot silently replace a different an
   } finally {await cloud.db.close();}
 });
 
+test('pause during a batch stops further uploads after the in-flight record',async()=>{
+  const cloud=await mockCloud();
+  try {
+    let pendingPause;
+    const d=await device({...cloud,transport:async(url,o)=>{
+      const result=await cloud.transport(url,o);
+      if(o.method==='POST' && !pendingPause) pendingPause=d.sync.action('disable');
+      return result;
+    }},{rounds:[round('one'),round('two'),round('three')]});
+    await d.sync.action('enable',{confirmed:true});await pendingPause;
+    assert.equal(cloud.control.uploads.length,1);assert.equal((await d.sync.status()).enabled,false);
+    assert.equal(d.engine.backup().data.sessions.length,3);
+  } finally {await cloud.db.close();}
+});
+
 test('account binding blocks another user, logout removes tokens, refresh is serialized, and unsafe endpoints/keys are rejected',async()=>{
   for(const url of ['http://testproject.supabase.co','https://127.0.0.1','https://testproject.supabase.co/a','https://x.supabase.co@evil.example/']) assert.throws(()=>validateSyncConfig({...config,url}));
   assert.throws(()=>validateSyncConfig({...config,publishableKey:'sb_secret_abcdef'}));
