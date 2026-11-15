@@ -61,6 +61,7 @@ struct SettingsScreen:View {
     var authFields:some View{Group{
         if auth["loggedIn"].flag{Label("已连接 ChatGPT",systemImage:"checkmark.shield");Text(auth["account"]["label"].text).font(.subheadline).foregroundStyle(.secondary)
             ForEach(auth["accounts"].list,id:\.json){account in if account["id"] != auth["activeId"]{Button("切换："+account["label"].text){Task{await store.perform("切换账号…"){auth=try await store.request("chatgpt/select",["accountId":account["id"]]);models=(try await store.request("chatgpt/models"))["models"].list}}}}}
+        }
         Button(auth["loggedIn"].flag ? "连接另一个 ChatGPT 账号":"Continue with ChatGPT"){Task{await store.perform("请在官方页面完成授权…"){auth=try await store.request("chatgpt/login");models=(try await store.request("chatgpt/models"))["models"].list;connectionNotice="授权完成，选择模型后保存即可使用。"}}}
         if auth["loggedIn"].flag{Button("退出当前授权",role:.destructive){Task{await store.perform("退出授权…"){auth=try await store.request("chatgpt/logout");models=[]}}}}
         Text("符合条件的 AI 请求使用 ChatGPT 订阅额度，权限与用量以官方页面为准。").font(.caption).foregroundStyle(.secondary)
@@ -86,7 +87,7 @@ struct SettingsScreen:View {
         Text("用同一邮箱在电脑和手机间同步。API 密钥与授权凭据不会上传。").font(.caption).foregroundStyle(.secondary)
     }}
     func loadConfig(){let saved=store.state["config"];provider=saved["provider"].text.isEmpty ? "openai":saved["provider"].text;baseURL=saved["baseURL"].text;model=saved["model"].text}
-    func changeProvider(){baseURL=["chatgpt":"https://api.openai.com/v1","openai":"https://api.openai.com/v1","deepseek":"https://api.deepseek.com/v1","anthropic":"https://api.anthropic.com/v1","gemini":"https://generativelanguage.googleapis.com/v1beta"][provider] ?? "";apiKey="";models=[];model="";connectionNotice="";if provider=="chatgpt"{Task{await refreshAccounts()}}}
+    func changeProvider(){let saved=store.state["config"];baseURL=provider==saved["provider"].text ? saved["baseURL"].text:(["chatgpt":"https://api.openai.com/v1","openai":"https://api.openai.com/v1","deepseek":"https://api.deepseek.com/v1","anthropic":"https://api.anthropic.com/v1","gemini":"https://generativelanguage.googleapis.com/v1beta"][provider] ?? "");apiKey="";models=[];model=provider==saved["provider"].text ? saved["model"].text:"";connectionNotice="";if provider=="chatgpt"{Task{await refreshAccounts()}}}
     func refreshAccounts()async{do{auth=try await store.request("chatgpt/status");sync=try await store.request("sync/status");if auth["loggedIn"].flag && provider=="chatgpt"{models=(try await store.request("chatgpt/models"))["models"].list}}catch{connectionNotice=error.localizedDescription}}
     func syncAction(_ action:String,_ body:[String:J]=[:])async{
         guard store.busy.isEmpty else{return};store.busy="正在处理同步…";syncError="";syncNotice="";defer{store.busy=""}

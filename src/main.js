@@ -3,7 +3,6 @@ import './style.css';
 import './dashboard.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Keyboard } from '@capacitor/keyboard';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
 const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
@@ -634,14 +633,6 @@ document.addEventListener('focusin', event => {
   if (event.target.matches?.('input,textarea,select,[contenteditable="true"]')) scheduleFocusedField();
 });
 window.visualViewport?.addEventListener('resize',updateViewport);window.visualViewport?.addEventListener('scroll',updateViewport);window.addEventListener('resize',updateViewport);updateViewport();
-if (native) {
-  for (const name of ['keyboardWillShow', 'keyboardDidShow', 'keyboardWillHide', 'keyboardDidHide']) {
-    Keyboard.addListener(name, () => {
-      document.documentElement.classList.toggle('keyboard-open', name.endsWith('Show'));
-      updateViewport();
-    }).catch(e => console.warn('Keyboard listener unavailable', e));
-  }
-}
 if(native) deviceBridge.safeArea().then(i=>{for(const edge of ['top','bottom','left','right'])document.documentElement.style.setProperty(`--safe-${edge}`,`${i[edge]}px`);}).catch(()=>{});
 const chatGPTReturn = new URLSearchParams(location.search).get('chatgpt');
 if (chatGPTReturn) history.replaceState(null, '', location.pathname);

@@ -1,5 +1,7 @@
 # iOS 独立版
 
+**当前 2.0 开发已转为 SwiftUI 原生界面。** 请使用 [SwiftUI 构建与验证说明](ios-swiftui.md)；下文是已发布的 1.x Capacitor 版本记录。新的 `ios:sync` 只生成无页面引擎资源，不再同步 Capacitor，`ios:open` 会先用 XcodeGen 生成原生工程。
+
 手机可使用 ChatGPT 订阅授权，或直接连接用户填写的 OpenAI、DeepSeek、Anthropic、Gemini、OpenAI 兼容 API；不依赖电脑版服务，也不提供本机 Codex 或历史聊天背景导入入口。界面和学习逻辑与网页版共用。目标系统为 iOS 16 或更高版本。Bundle ID 为 `com.languagestudycoach.app`。
 
 ## 本机已完成的准备

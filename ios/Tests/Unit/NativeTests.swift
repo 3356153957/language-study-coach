@@ -33,4 +33,10 @@ import XCTest
         defer{try? FileManager.default.removeItem(at:vault.directory.appendingPathComponent(name+".enc"))}
         XCTAssertEqual(try vault.read(name),"{\"version\":1,\"sessions\":[]}")
     }
+    func testSignedChatGPTIdentityRejectsTamperingNonceAndAudience()throws{
+        let file=Bundle(for:Self.self).url(forResource:"identity-fixture",withExtension:"json")!
+        let fixture=try J.decode(Data(contentsOf:file)),input=fixture["input"],keys=fixture["keys"]
+        XCTAssertEqual(try SignedIdentity.verify(input,keys:keys)["subject"].text,"fixture-subject")
+        for (field,value) in [("nonce","wrong"),("clientId","wrong"),("token",input["token"].text+"bad")]{var modified=input.dictionary;modified[field] = .s(value);XCTAssertThrowsError(try SignedIdentity.verify(.object(modified),keys:keys))}
+    }
 }

@@ -11,7 +11,7 @@
     "evaluate:coach": "node scripts/evaluate-coach-fixture.js",
     "verify:codex": "node scripts/verify-codex.js",
     "ios:sync": "node scripts/build-native-ios.mjs",
-    "ios:open": "cap open ios"
+    "ios:open": "node scripts/open-native-ios.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",
@@ -21,7 +21,6 @@
   "dependencies": {
     "@capacitor/core": "^8.6.2",
     "@capacitor/ios": "^8.6.2",
-    "@capacitor/keyboard": "^8.0.6",
     "@supabase/supabase-js": "2.119.0",
     "jose": "^6.2.17"
   }

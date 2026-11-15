@@ -45,7 +45,11 @@ globalThis.URL=class {
 };
 globalThis.fetch=async(url,options={})=>{
   options.signal?.throwIfAborted();
-  const response=await nativeInvoke('http',{url:String(url),method:options.method || 'GET',headers:Object.fromEntries(new Headers(options.headers)),body:options.body,timeout:options.signal?.timeout || 60000});
-  options.signal?.throwIfAborted();
-  return new Response(response.body,{status:response.status,headers:response.headers});
+  let cancel;
+  const aborted=new Promise((resolve,reject)=>{cancel=()=>reject(options.signal.reason);options.signal?.addEventListener('abort',cancel);});
+  try {
+    const response=await Promise.race([nativeInvoke('http',{url:String(url),method:options.method || 'GET',headers:Object.fromEntries(new Headers(options.headers)),body:options.body,timeout:options.signal?.timeout || 60000}),aborted]);
+    options.signal?.throwIfAborted();
+    return new Response(response.body,{status:response.status,headers:response.headers});
+  }finally{options.signal?.removeEventListener('abort',cancel);}
 };

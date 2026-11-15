@@ -75,7 +75,7 @@ struct StudyVault {
         var stores:[String:String]=[:]
         if fixture{stores["learning-state"]=Self.fixtureState}
         if !fixture {do{for name in ["learning-state","chatgpt-auth","cloud-sync"]{stores[name]=try vault.read(name)}}catch{startupError="无法读取手机上的加密记录，原文件已保留。请勿卸载应用。"}}
-        context.exceptionHandler={ [weak self] _,value in self?.startupError="学习引擎初始化失败：\(value?.toString() ?? "未知错误")" }
+        context.exceptionHandler={ [weak self] _,_ in self?.startupError="手机学习服务暂时无法启动，请保留本机记录并更新应用。" }
         let load:@convention(block)(String)->String={stores[$0] ?? "null"};context.setObject(load,forKeyedSubscript:"__nativeLoad" as NSString)
         let save:@convention(block)(String,String)->String={ [weak self] name,value in
             guard let self=self else{return "应用已关闭。"};if fixture{stores[name]=value;return ""}

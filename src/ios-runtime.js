@@ -12,13 +12,13 @@ const auth=createChatGPTAuth({load:()=>load('chatgpt-auth'),save:value=>save('ch
 const engine=createEngine({initialState:load('learning-state') || undefined,save:value=>save('learning-state',value),availableProviders:Object.fromEntries(Object.entries(providers).filter(([id])=>id!=='codex')),allowImport:false,
   modelCall:(config,system,context)=>config?.provider==='chatgpt'?auth.complete(config,system,context):callModel(config,system,context)});
 const config=JSON.parse(__nativeConfig());
-const otpClient=()=>({auth:{
-  signInWithOtp:async({email,options})=>otp('otp',{email,create_user:options?.shouldCreateUser!==false,gotrue_meta_security:{captcha_token:options?.captchaToken}}),
-  verifyOtp:async input=>otp('verify',input),
-  refreshSession:async({refresh_token})=>otp('token?grant_type=refresh_token',{refresh_token}),
+const otpClient=(url,key)=>({auth:{
+  signInWithOtp:async({email,options})=>otp(url,key,'otp',{email,create_user:options?.shouldCreateUser!==false,gotrue_meta_security:{captcha_token:options?.captchaToken}}),
+  verifyOtp:async input=>otp(url,key,'verify',input),
+  refreshSession:async({refresh_token})=>otp(url,key,'token?grant_type=refresh_token',{refresh_token}),
 }});
-async function otp(path,body) {
-  const response=await fetch(`${config.url}/auth/v1/${path}`,{method:'POST',headers:{apikey:config.publishableKey,'Content-Type':'application/json'},body:JSON.stringify(body)});
+async function otp(url,key,path,body) {
+  const response=await fetch(`${url}/auth/v1/${path}`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
   const data=await response.json();
   if(!response.ok)return {error:{status:response.status}};
   if(data.access_token) {data.expires_at ||= Math.floor(Date.now()/1000)+data.expires_in;return {data:{session:data}};}

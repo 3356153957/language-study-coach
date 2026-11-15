@@ -75,3 +75,4 @@ struct MistakesScreen:View {
     @State var result:J = .null
     var body:some View{NavigationStack{List{if result["items"].list.isEmpty{Section{Label("这里会留下值得再练的知识点",systemImage:"checkmark.circle").padding(.vertical)}};ForEach(result["items"].list,id:\.json){entry in Section{Text(entry["task"]["prompt"].text).font(.headline);Text(entry["feedback"]["explanation"].text).font(.subheadline);DisclosureGroup("回答与参考"){Text("你的回答："+entry["answer"].text);Text("参考表达："+entry["task"]["answer"].text)};Button("换道题再练"){Task{await store.start("综合",reviewID:entry["id"].text)}}}}.navigationTitle("错题回顾").toolbar{GoalMenu()}.task(id:store.goal){result=(try? await store.request("review",["goal":.s(store.goal)])) ?? .null}}}
 }
+}
