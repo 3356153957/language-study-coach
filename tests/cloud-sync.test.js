@@ -8,7 +8,7 @@ import { exportBackup } from '../server/backup.js';
 import { reconcile, recordsFromBackup } from '../server/sync-records.js';
 import { nativeSyncTransport, createNativeClient } from '../src/native-client.js';
 import { createAPI } from '../server/api.js';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -231,14 +231,22 @@ test('background cloud requests do not block learning; HTTP status never exposes
   const server=createServer((req,res)=>api(req,res,()=>{res.writeHead(404);res.end();}));
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${server.address().port}`;
-  const post=(route,body,origin=base)=>fetch(`${base}/api/${route}`,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Coach-Request':'1'},body:JSON.stringify(body)});
+  // Windows may assign a dynamic port forbidden by WHATWG fetch (e.g. 6666).
+  // Use the native HTTP client so the isolation check doesn't fail randomly.
+  const call=(route,body,origin=base)=>new Promise((resolve,reject)=>{
+    const req=httpRequest(`${base}/api/${route}`,{method:body===undefined?'GET':'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Coach-Request':'1'}},res=>{
+      let text='';res.setEncoding('utf8');res.on('data',part=>{text+=part;});res.on('end',()=>resolve(new Response(text,{status:res.statusCode,headers:res.headers})));res.on('error',reject);
+    });
+    req.on('error',reject);req.setTimeout(10000,()=>req.destroy(new Error('Test HTTP request timed out')));req.end(body===undefined?undefined:JSON.stringify(body));
+  });
+  const post=call;
   try {
     assert.equal((await post('sync/configure',config,'https://untrusted.example')).status,403);
     await post('sync/configure',config);await post('sync/verify',{email:'a@example.com',code:'123456'});await post('sync/enable',{confirmed:true});
     hold=true;const pending=post('sync/run',{});await started;
     assert.equal((await post('settings',{provider:'openai',model:'test-only',apiKey:'private-test-key'})).status,200);
     release();assert.equal((await pending).status,200);
-    const status=await (await fetch(`${base}/api/sync/status`)).text();assert.equal(status.includes('test-access'),false);assert.equal(status.includes('test-refresh'),false);
+    const status=await (await call('sync/status')).text();assert.equal(status.includes('test-access'),false);assert.equal(status.includes('test-refresh'),false);
   } finally {
     release();api.close();await new Promise(resolve=>server.close(resolve));
     assert.ok(path.resolve(directory).startsWith(path.resolve(tmpdir())+path.sep));await rm(directory,{recursive:true,force:true});
