@@ -6,6 +6,10 @@ on:
         description: '使用已配置的 Apple 签名导出可安装 IPA'
         type: boolean
         default: false
+      simulator:
+        description: '构建并截图检查 iPhone 16 Pro 模拟器'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -56,6 +60,17 @@ jobs:
           name: language-study-coach-ios-${{ inputs.signed && 'signed' || 'unsigned' }}
           path: build/ios/*.ipa
           if-no-files-found: error
+      - name: Check iPhone 16 Pro simulator
+        if: inputs.simulator
+        run: bash scripts/check-ios-simulator.sh
+      - uses: actions/upload-artifact@v4
+        if: inputs.simulator && always()
+        with:
+          name: iphone16pro-layout
+          path: |
+            build/ios-simulator/*.png
+            build/ios-simulator/*.log
+          if-no-files-found: warn
       - name: Remove temporary signing material
         if: always() && inputs.signed
         run: |
