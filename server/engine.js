@@ -1,4 +1,5 @@
-import { AppError, providers, validateConfig, callModel } from './providers.js';
+import { AppError, providers, validateConfig, validateAPIConnection, callModel } from './providers.js';
+import { listModels } from './model-catalog.js';
 import { goals, modes, prompts, gradingContext, validateTask, validateFeedback, validateReport, validateReply } from './coach.js';
 import { validateBackground } from './background.js';
 import { sharedProfile, examEvidence, examOutlook } from './profile.js';
@@ -8,7 +9,7 @@ import { canonical, recordsFromBackup, recordKey, reconcile, mergeCloudRecords }
 
 
 const randomUUID = () => globalThis.crypto.randomUUID();
-export function createEngine({ initialState = { version: 1, config: null, profiles: {}, sessions: [] }, save, modelCall = callModel, codex, availableProviders = providers, allowImport = true }) {
+export function createEngine({ initialState = { version: 1, config: null, profiles: {}, sessions: [] }, save, modelCall = callModel, modelFetcher = fetch, codex, availableProviders = providers, allowImport = true }) {
   let state = initialState, busy = false;
   const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary?.slice(0, 140) };
   const active = s => s.sessions.find(x => !x.finishedAt);
@@ -201,6 +202,11 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   }
   return {
     view, detail, review, profile, activity: offset => activityData(state, offset),
+    async models(input) {
+      if (!Object.hasOwn(availableProviders, input.provider)) throw new AppError('此设备不支持该服务商。');
+      const config = validateAPIConnection(input, state.config || {});
+      return listModels(config, modelFetcher);
+    },
     backup: () => exportBackup(state), previewImport: input => planImport(state,input).summary,
     async mergeCloud(records) {
       if(busy) throw new AppError('正在保存本次练习，稍后自动重试同步。',409);

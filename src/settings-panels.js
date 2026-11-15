@@ -1,3 +1,24 @@
+import { icon } from './icons.js';
+
+export function renderModelOptions({models,query,current,esc}) {
+  const search = query.trim().toLowerCase();
+  const filtered = models.filter(m => `${m.id} ${m.name}`.toLowerCase().includes(search));
+  return `<option value="">${filtered.length ? '请选择模型' : '没有匹配的模型'}</option>
+    ${current && !filtered.some(m => m.id === current) ? `<option selected value="${esc(current)}">当前：${esc(current)}</option>` : ''}
+    ${filtered.map(m => `<option value="${esc(m.id)}" ${m.id === current ? 'selected' : ''}>${esc(m.name === m.id ? m.id : `${m.name} · ${m.id}`)}</option>`).join('')}`;
+}
+
+export function renderModelPicker({catalog:c,cfg,busy,esc,button}) {
+  const hasList = !!c.models?.length;
+  return `<section id="model-picker" class="model-picker" aria-label="模型选择" aria-busy="${c.loading}">
+    <div class="model-picker-heading"><span>学习模型</span>${button(`${icon('refresh')}<span>${c.loading ? '正在获取…' : c.models ? '刷新模型' : '获取模型'}</span>`,'models-refresh','secondary-button model-picker-refresh',c.loading ? 'disabled' : '')}</div>
+    ${hasList && !c.manual ? `<label class="model-search-label"><span class="sr-only">搜索模型</span><input id="model-search" type="search" autocomplete="off" value="${esc(c.query)}" placeholder="搜索模型名称或 ID" ${busy ? 'disabled' : ''}></label>
+      <label><span class="sr-only">选择模型</span><select name="model" id="upstream-model" required ${busy ? 'disabled' : ''}>${renderModelOptions({models:c.models,query:c.query,current:cfg.model,esc})}</select></label>` : `<label><span class="sr-only">模型 ID</span><input name="model" required maxlength="200" value="${esc(cfg.model)}" placeholder="获取后选择，或手动填写模型 ID" ${busy ? 'disabled' : ''}></label>`}
+    <div class="model-picker-status" role="status">${c.loading ? '<span class="spinner"></span>正在从当前接口读取模型…' : c.error ? esc(c.error) : c.models ? c.models.length ? `已获取 ${c.models.length} 个模型${c.truncated ? '（列表较长，可手动填写其他模型）' : ''}` : '上游未返回可选模型，可手动填写模型 ID。' : '填好地址和密钥后获取，也可手动填写。'}</div>
+    ${hasList ? button(c.manual ? '从列表选择' : '手动填写模型 ID','models-mode','text-button model-picker-mode') : ''}
+  </section>`;
+}
+
 export function renderDataSettings({preview,esc,button}) {
   return `<section class="settings-data dash-panel" aria-label="学习数据"><h2>学习数据</h2><p>备份练习、追问和能力画像，可在手机与网页版之间迁移。文件包含你的学习内容，请妥善保存；不包含 API 密钥或 ChatGPT 登录凭据。</p><div class="form-actions">${button('导出备份','data-export','secondary-button')}${button('导入备份','data-pick','secondary-button')}</div><input type="file" id="backup-file" accept="application/json,.json" hidden>
     ${preview ? `<div class="backup-preview" role="status"><strong>导入预览</strong><p>文件含 ${preview.rounds} 轮练习、${preview.answers} 道作答。新增 ${preview.added} 轮，更新 ${preview.updated} 轮，跳过 ${preview.skipped} 轮。${preview.conflicts ? `有 ${preview.conflicts} 处进度冲突，将保留本机记录。` : ''}</p><p>合并导入会保留当前练习及模型配置。</p><div class="form-actions">${button('确认合并导入','data-confirm')}${button('取消导入','data-cancel','text-button')}</div></div>` : ''}

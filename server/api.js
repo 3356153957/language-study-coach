@@ -7,7 +7,7 @@ import { createChatGPTAuth } from './chatgpt-auth.js';
 import { backupLimit } from './backup.js';
 import { createCloudSync } from './cloud-sync.js';
 
-export async function createAPI({ directory, modelCall, codex = new CodexBridge({ directory }), chatgpt, syncOptions={} } = {}) {
+export async function createAPI({ directory, modelCall, modelFetcher = fetch, codex = new CodexBridge({ directory }), chatgpt, syncOptions={} } = {}) {
   chatgpt ||= createChatGPTAuth({
     load:async()=>{try{return JSON.parse(await readFile(path.join(directory,'chatgpt-auth.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new AppError('ChatGPT 授权文件无法读取。');}},
     save:async value=>{await mkdir(directory,{recursive:true});const file=path.join(directory,'chatgpt-auth.json');await writeFile(`${file}.tmp`,JSON.stringify(value),{mode:0o600});await rename(`${file}.tmp`,file);},
@@ -17,7 +17,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
   let state = { version: 1, config: null, profiles: {}, sessions: [] };
   try { state = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error('学习数据无法读取，请保留 .local/state.json 并检查文件。'); }
   let busy = false, chatgptLoginError = '';
-  const engine = createEngine({ initialState: state, modelCall, codex, save: async draft => {
+  const engine = createEngine({ initialState: state, modelCall, modelFetcher, codex, save: async draft => {
     await mkdir(directory, { recursive: true });
     await writeFile(`${file}.tmp`, JSON.stringify(draft, null, 2), { mode: 0o600 });
     await rename(`${file}.tmp`, file);
@@ -58,7 +58,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       if (req.headers['x-coach-request'] !== '1' || !req.headers['content-type']?.startsWith('application/json')) throw new AppError('请求来源或格式不正确。', 403);
       // Cloud network requests must not occupy the learning/API transaction lock.
       // Their short local merge obtains the engine's lock independently.
-      if(!route.startsWith('/api/sync/')) {
+      if(!route.startsWith('/api/sync/') && route !== '/api/settings/models') {
         if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
         busy = true; ownsLock = true;
       }
@@ -68,6 +68,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       let input;
       try { input = JSON.parse(raw); } catch { throw new AppError('请求不是有效 JSON。'); }
       if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('请求格式不正确。');
+      if (route === '/api/settings/models') return send(200, await engine.models(input));
       if(route.startsWith('/api/sync/')) {
         const result=await sync.action(route.slice('/api/sync/'.length),input);
         return send(200,{...result,state:engine.view(viewOptions)});

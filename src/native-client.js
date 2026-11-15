@@ -11,7 +11,8 @@ export const mobileProviders = Object.fromEntries(Object.entries(providers).filt
 export function nativeFetcher(http = CapacitorHttp) {
   return async (url, options) => {
     const result = await http.request({ url, method: options.method, headers: options.headers,
-      data: JSON.parse(options.body), responseType: 'json', connectTimeout: 15000, readTimeout: 60000, disableRedirects: true });
+      ...(options.body === undefined ? {} : {data: JSON.parse(options.body)}), responseType: 'json', connectTimeout: 15000,
+      readTimeout: options.method === 'GET' ? 15000 : 60000, disableRedirects: true });
     return { ok: result.status >= 200 && result.status < 300, status: result.status,
       json: async () => typeof result.data === 'string' ? JSON.parse(result.data) : result.data };
   };
@@ -37,7 +38,7 @@ export function nativeSyncTransport(http = CapacitorHttp) {
   };
 }
 
-export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt, syncOptions={},
+export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt, syncOptions={}, modelFetcher = nativeFetcher(),
   modelCall = (config, system, context) => config?.provider==='chatgpt' ? auth.complete(config,system,context) : callModel(config, system, context, nativeFetcher()) } = {}) {
   const auth=chatgpt || createChatGPTAuth({load:async()=>{const {value}=await store.loadAuth();return value?JSON.parse(value):null;},save:async value=>{await store.saveAuth({value:JSON.stringify(value)});},transport:nativeAuthTransport()});
   let initialState;
@@ -48,7 +49,7 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
       if (initialState.version !== 1 || !Array.isArray(initialState.sessions)) throw new Error();
     }
   } catch { throw new AppError('手机学习记录无法读取。请重新打开应用；不要卸载，以免丢失记录。'); }
-  const engine = createEngine({ initialState, modelCall, availableProviders: mobileProviders, allowImport: false,
+  const engine = createEngine({ initialState, modelCall, modelFetcher, availableProviders: mobileProviders, allowImport: false,
     save: async state => {
       try { await store.save({ value: JSON.stringify(state) }); }
       catch { throw new AppError('手机存储失败，原有记录未覆盖，请检查可用空间后重试。'); }
@@ -80,7 +81,8 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'chatgpt/select') return auth.select(body.accountId);
     if (path.startsWith('codex/') || path === 'background/import') throw new AppError('手机独立版不提供此功能。', 404);
     if (path === 'session/start' && body?.placement) throw new AppError('请从日常练习开始。');
-    if (path === 'settings' && !String(body?.baseURL || mobileProviders[body?.provider]?.baseURL || '').startsWith('https://')) throw new AppError('手机 API 地址须使用 HTTPS。');
+    if (['settings','settings/models'].includes(path) && !String(body?.baseURL || mobileProviders[body?.provider]?.baseURL || '').startsWith('https://')) throw new AppError('手机 API 地址须使用 HTTPS。');
+    if (path === 'settings/models') return engine.models(body || {});
     if (path === 'settings' && body?.provider==='chatgpt' && !(await auth.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
     const result=await engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
     if(path.startsWith('session/') || path==='data/import') sync.notifyChange();

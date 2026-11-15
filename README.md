@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-打开 http://127.0.0.1:5173/ 。进入「模型设置」，可选择「本机 Codex」复用 ChatGPT 登录，也可填写其他服务商的 API 地址、模型 ID 和 API Key。保存后测试连接。未连接真实模型时不会生成模拟成绩。
+打开 http://127.0.0.1:5173/ 。进入「模型设置」，可选择「本机 Codex」复用 ChatGPT 登录，也可填写其他服务商的 API 地址与 API Key，自动获取可用模型后自行选择。保存后测试连接。未连接真实模型时不会生成模拟成绩。
 
 ```sh
 npm test          # 接口适配与学习流程测试
@@ -47,13 +47,15 @@ npm run preview  # 同一端口预览构建结果，也会启动本地 API
 | 选项 | 协议 | 配置方式 |
 | --- | --- | --- |
 | 本机 Codex | 官方 app-server / stdio | 复用本机登录，或通过官方页面 / 设备码授权；无需填写 Key |
-| OpenAI | Chat Completions | 自填可用模型 ID 与 Key |
-| DeepSeek | OpenAI 兼容 | 自填模型 ID 与 Key |
-| OpenAI 兼容接口 | Chat Completions | 自填供应商提供的基础地址、模型和 Key |
-| Anthropic | Messages | 自填 Claude 模型 ID 与 Key |
-| Google Gemini | generateContent | 自填 Gemini 模型 ID 与 Key |
+| OpenAI | Chat Completions | 填写 Key，获取模型后选择 |
+| DeepSeek | OpenAI 兼容 | 填写 Key，获取模型后选择 |
+| OpenAI 兼容接口 | Chat Completions | 填写基础地址与 Key，获取模型后选择 |
+| Anthropic | Messages | 填写 Key，获取模型后选择 |
+| Google Gemini | generateContent | 填写 Key，获取模型后选择 |
 
 模型需能遵循提示返回 JSON。兼容接口的具体模型支持程度仍取决于供应商，不代表所有厂商均已实测。当前保存一套有效配置，切换服务商或地址需要重新输入密钥。
+
+填好地址和密钥后自动读取上游模型列表；已有 API 配置再次进入设置也会自动读取。支持搜索、刷新及手动填写模型 ID，不会自动替你选择或切换模型，点击「保存配置」才生效。获取失败时保留当前模型并显示原因。网页与 iOS 共用此功能，详情见 [模型列表](docs/model-discovery.md)。
 
 接口实现参考官方文档（2026-11-14 核对）：[OpenAI](https://developers.openai.com/api/reference/resources/chat)、[Anthropic](https://platform.claude.com/docs/en/api/messages/create)、[Gemini](https://aistudio.google.com/api-reference/generate-content/generate-content)。
 
@@ -87,6 +89,8 @@ npm run preview  # 同一端口预览构建结果，也会启动本地 API
 已准备 Capacitor iOS 工程，手机直接使用各厂商 API，本地加密保存学习记录。运行 `npm run ios:sync` 更新工程；无 Mac 可用仓库中的 GitHub Actions 编译。已生成 `build/ios/LanguageStudyCoach-unsigned.ipa`；签名和真机安装尚未验证，见 [iOS 说明](docs/ios.md)。
 
 ## 验证状态
+
+- 上游模型列表（2026-11-15）：72 项本地测试通过，覆盖五个 API 选项、分页、密钥隔离、原生 GET 请求、错误处理及模型选择。隔离浏览器已验证自动获取、搜索、选择保存、手动输入、失败提示和切换服务商。厂商协议使用模拟响应验证，未用真实 API Key 逐家请求。
 
 - 可选云同步（2026-11-15）：64 项本地检查通过，含真实 PostgreSQL 的 RLS / 修订检查、双设备与离线重试、暂停中断、官方 SDK 登录刷新协议和跨站拒绝。统一 Supabase 项目及 SMTP 已部署，实际 SQL 权限检查及匿名 HTTP 拒绝通过；独立测试邮箱已完成真实收件、验证码登录、联网上传合并与暂停，正式网页邮箱入口也已核验。iOS 1.3（build 4）已通过 63 项云构建测试并生成内置统一公开配置的未签名 IPA，签名安装和真机同步尚未验证，详见 [配置说明](docs/cloud-sync.md)。
 

@@ -3,7 +3,7 @@ import './style.css';
 import './dashboard.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { renderDataSettings, renderChatGPTPanel, renderSyncPanel } from './settings-panels.js';
+import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
 const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
 const defaultProvider = native ? 'openai' : 'codex';
@@ -34,6 +34,8 @@ let syncStatus=null,syncPreview=null,syncRunning=false;
 const syncFields={email:'',code:''};
 let planWelcome = false;
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
+const emptyCatalog = () => ({models:null,loading:false,error:'',query:'',manual:false,truncated:false});
+let modelCatalog = emptyCatalog(), modelGeneration = 0, modelTimer;
 try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } catch { /* Replace invalid tab draft. */ }
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
 const current = () => data?.sessions.find(x => !x.finishedAt);
@@ -75,6 +77,39 @@ async function request(path, body) {
   const result = await res.json();
   if (!res.ok) throw new Error(result.error || '本地服务暂时不可用。');
   return result;
+}
+function sameSavedSource(cfg) {
+  return cfg?.provider === data?.config?.provider && String(cfg.baseURL || '').trim().replace(/\/+$/, '') === data.config.baseURL;
+}
+function resetModelCatalog() {
+  modelGeneration++; clearTimeout(modelTimer); modelCatalog = emptyCatalog();
+}
+function paintModelPicker() {
+  const panel = app.querySelector('#model-picker');
+  if (panel && screen === 'settings') panel.outerHTML = renderModelPicker({catalog:modelCatalog,cfg:settingsDraft,busy,esc,button});
+}
+async function fetchModels() {
+  clearTimeout(modelTimer);
+  if (modelCatalog.loading || !settingsDraft || ['codex','chatgpt'].includes(settingsDraft.provider)) return;
+  const generation = ++modelGeneration, input = {...settingsDraft};
+  modelCatalog.loading = true; modelCatalog.error = ''; paintModelPicker();
+  try {
+    const result = await request('settings/models', input);
+    if (generation !== modelGeneration || screen !== 'settings') return;
+    modelCatalog.models = result.models; modelCatalog.truncated = result.truncated;
+  } catch (e) {
+    if (generation !== modelGeneration || screen !== 'settings') return;
+    modelCatalog.error = e.message;
+  } finally {
+    if (generation === modelGeneration) { modelCatalog.loading = false; paintModelPicker(); }
+  }
+}
+function autoFetchModels(delay = 250) {
+  clearTimeout(modelTimer);
+  const cfg = settingsDraft;
+  if (!cfg || ['codex','chatgpt'].includes(cfg.provider) || (!cfg.apiKey?.trim() && !(sameSavedSource(cfg) && data.config.hasKey))) return;
+  try { const url = new URL(cfg.baseURL); if (url.protocol !== 'https:' && !(url.protocol === 'http:' && !native && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) return; } catch {return;}
+  modelTimer = setTimeout(fetchModels, delay);
 }
 async function refreshCodex() {
   if (codexLoading) return;
@@ -159,6 +194,7 @@ function navigate(target) {
   if (target !== 'summary') detailSession = null;
   if (target !== 'review') { reviewData = null; reviewOffset = 0; }
   if (!['activity','week'].includes(target)) activityData = null;
+  resetModelCatalog();
   if (target !== 'settings') { settingsDraft = null; codexStatus = null; authURL = ''; importBackup = null; importPreview = null; }
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (target === 'activity' || target === 'week') {
@@ -180,7 +216,7 @@ function navigate(target) {
     if (settingsDraft.provider === 'chatgpt') refreshAuth();
     refreshSync();
   }
-  render(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  render(); if (target === 'settings') autoFetchModels(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function selectGoal(value) { goal = value; localStorage.setItem('lsc-goal-v1', goal); navigate('home'); }
 function render() {
@@ -228,8 +264,8 @@ function settings() {
   return `<section class="settings-page"><span class="eyebrow">MAKE IT YOURS</span><h1>连接你的 <em>AI。</em></h1><p class="lead">选择模型，把它变成了解你的英语教练。</p><div class="settings-grid"><form id="settings-form" class="card-surface settings-form">
     <label>服务商<select name="provider" ${busy ? 'disabled' : ''}>${Object.entries(data.providers).map(([key, p]) => `<option value="${key}" ${cfg.provider === key ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label>
     ${cfg.provider === 'chatgpt' ? renderChatGPTPanel({status:authStatus,loading:authLoading,models:authModels,authURL,cfg,esc,button}) : cfg.provider === 'codex' ? codexPanel(cfg) : `<label>API 地址<input name="baseURL" type="url" required value="${esc(cfg.baseURL)}" placeholder="https://your-provider.example/v1" ${busy ? 'disabled' : ''}></label><p class="field-help">填写基础地址，通常以 /v1 结尾；不包含 /chat/completions。</p>
-    <label>模型 ID<input name="model" required maxlength="200" value="${esc(cfg.model)}" placeholder="填写供应商控制台中的模型名称" ${busy ? 'disabled' : ''}></label>
-    <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${data.config?.hasKey ? '已保存；同一地址留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
+    <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${sameSavedSource(cfg) && data.config?.hasKey ? '已保存；留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
+    ${renderModelPicker({catalog:modelCatalog,cfg,busy,esc,button})}
     <div class="form-actions"><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>保存配置</button>${button('测试已保存的连接', 'test-connection', 'secondary-button', data.configured ? '' : 'disabled')}</div>`}</form>
     <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div>${renderDataSettings({preview:importPreview,esc,button})}${syncPanel()}</section>`;
 }
@@ -314,6 +350,8 @@ app.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
+  if (action === 'models-refresh') return fetchModels();
+  if (action === 'models-mode') {modelCatalog.manual = !modelCatalog.manual; modelCatalog.query = ''; return paintModelPicker();}
   if(action==='plan-notice-close') {if(authStatus?.activeId)localStorage.setItem(`lsc-plan-notice-${authStatus.activeId}`,'seen');planWelcome=false;return render();}
   if(action==='sync-code') return run('正在发送验证码…',async()=>{await syncAction('send-code',{email:syncFields.email || syncStatus?.email});notice='验证码已发送，请查看邮箱；一分钟后可重新发送。';});
   if(action==='sync-cancel') {syncPreview=null;return render();}
@@ -440,9 +478,27 @@ app.addEventListener('input', event => {
   if(event.target.closest('#sync-panel') && event.target.name) syncFields[event.target.name]=event.target.value;
   if (event.target.id === 'answer-text') { draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !draft.answer.trim(); }
   if (event.target.id === 'coach-message') { draft.coachMessage = event.target.value; draft.coachRequestId = null; persistDraft(); const send = app.querySelector('[data-action="send-coach"]'); if (send) send.disabled = !draft.coachMessage.trim(); }
-  if (event.target.closest('#settings-form')) settingsDraft = { ...settingsDraft, [event.target.name]: event.target.value };
+  if (event.target.id === 'model-search') {
+    modelCatalog.query = event.target.value;
+    const select = app.querySelector('#upstream-model');
+    if (select) select.innerHTML = renderModelOptions({models:modelCatalog.models,query:modelCatalog.query,current:settingsDraft.model,esc});
+    return;
+  }
+  if (event.target.closest('#settings-form') && event.target.name) {
+    settingsDraft = { ...settingsDraft, [event.target.name]: event.target.value };
+    if (['baseURL','apiKey'].includes(event.target.name)) {
+      // Editing an address must never automatically send the draft key there.
+      if (event.target.name === 'baseURL') {settingsDraft.apiKey = ''; app.querySelector('[name="apiKey"]').value = '';}
+      resetModelCatalog(); paintModelPicker();
+      if (event.target.name === 'baseURL') app.querySelector('[name="apiKey"]').placeholder = sameSavedSource(settingsDraft) && data.config?.hasKey ? '已保存；留空可继续使用' : '粘贴你的 API Key';
+      autoFetchModels(700);
+    }
+    if (event.target.name === 'model' && event.target.tagName === 'INPUT') modelCatalog.manual = true;
+  }
 });
 app.addEventListener('change', event => {
+  if (event.target.closest('#settings-form') && ['baseURL','apiKey'].includes(event.target.name)) autoFetchModels();
+  if (event.target.name === 'model') settingsDraft = {...settingsDraft,model:event.target.value};
   if(event.target.id==='backup-file') {
     const file=event.target.files[0];if(!file)return;
     return run('正在检查备份…',async()=>{if(file.size>20*1024*1024)throw new Error('备份超过 20 MB。');await previewBackup(await file.text());});
@@ -450,9 +506,11 @@ app.addEventListener('change', event => {
   if (event.target.id === 'dashboard-goal') return selectGoal(event.target.value);
   if (event.target.name === 'provider') {
     clearTimeout(codexPolling); clearTimeout(authPoll); authURL = ''; authModels = [];
+    resetModelCatalog();
     settingsDraft = { provider: event.target.value, baseURL: data.providers[event.target.value].baseURL, model: '', apiKey: '' };
     render(); if (settingsDraft.provider === 'codex') refreshCodex();
     if (settingsDraft.provider === 'chatgpt') refreshAuth();
+    autoFetchModels();
     refreshSync();
   }
   if (event.target.id === 'audio-speed') { speed = Number(event.target.value); if (audioState !== 'idle') playAudio(true); }

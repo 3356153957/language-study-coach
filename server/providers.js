@@ -12,6 +12,21 @@ export class AppError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 
+export function validateAPIConnection(input, previous = {}) {
+  const preset = providers[input.provider];
+  if (!preset || !['openai', 'anthropic', 'gemini'].includes(preset.protocol)) throw new AppError('请先选择 API 服务商。');
+  const baseURL = String(input.baseURL || preset.baseURL).trim().replace(/\/+$/, '');
+  let url;
+  try { url = new URL(baseURL); } catch { throw new AppError('API 地址格式不正确。'); }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:')) throw new AppError('API 地址须使用 HTTPS；本机服务可用 HTTP。');
+  if (baseURL.length > 2048 || url.username || url.password || url.search || url.hash) throw new AppError('API 地址不能带凭据、查询参数或锚点。');
+  const same = input.provider === previous.provider && baseURL === previous.baseURL;
+  const apiKey = String(input.apiKey || (same ? previous.apiKey || '' : '')).trim();
+  if (!apiKey || apiKey.length > 4096 || /[\r\n]/.test(apiKey)) throw new AppError('请填写 API Key；切换供应商或地址时需重新填写。');
+  return { provider: input.provider, baseURL, apiKey };
+}
+
 export function validateConfig(input, previous = {}) {
   const preset = providers[input.provider];
   if (!preset) throw new AppError('请选择支持的接口类型。');
@@ -20,19 +35,9 @@ export function validateConfig(input, previous = {}) {
     if (model.length > 200 || /[\r\n]/.test(model)) throw new AppError('模型 ID 格式不正确。');
     return { provider: input.provider, baseURL: input.provider === 'chatgpt' ? preset.baseURL : '', model };
   }
-  const baseURL = String(input.baseURL || preset.baseURL).trim().replace(/\/+$/, '');
-  let url;
-  try { url = new URL(baseURL); } catch { throw new AppError('API 地址格式不正确。'); }
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:')) throw new AppError('API 地址须使用 HTTPS；本机服务可用 HTTP。');
-  if (url.username || url.password || url.search || url.hash) throw new AppError('API 地址不能带凭据、查询参数或锚点。');
   const model = String(input.model || '').trim();
-  if (!model || model.length > 200) throw new AppError('请填写供应商提供的模型 ID。');
-  // A key can only be retained for exactly the same upstream destination.
-  const same = input.provider === previous.provider && baseURL === previous.baseURL;
-  const apiKey = String(input.apiKey || (same ? previous.apiKey || '' : '')).trim();
-  if (!apiKey || apiKey.length > 4096 || /[\r\n]/.test(apiKey)) throw new AppError('请填写 API Key；切换供应商或地址时需重新填写。');
-  return { provider: input.provider, baseURL, model, apiKey };
+  if (!model || model.length > 200 || /[\r\n]/.test(model)) throw new AppError('请填写供应商提供的模型 ID。');
+  return { ...validateAPIConnection(input, previous), model };
 }
 
 export function parseJSON(text) {

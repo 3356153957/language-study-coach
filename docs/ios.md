@@ -7,6 +7,7 @@
 - Capacitor 8.6.2 iOS 工程、Swift Package Manager 配置和安全区域适配。
 - `server/engine.js` 提供可在手机执行的学习流程，保留批改同时备题、追问、错题和跨目标画像。
 - `src/native-client.js` 使用原生 HTTP 请求，HTTPS 地址、禁止自动跳转，连接超时 15 秒、读取超时 60 秒。
+- API 服务支持自动获取、搜索和选择上游模型，也可手动填写；模型列表 GET 连接和读取各限时 15 秒，无需电脑版代理，见 [模型列表](model-discovery.md)。
 - `StudyStoragePlugin` 用 AES-GCM 加密 API 配置及学习记录，密钥由本机 Keychain 保存；写文件采用原子替换。不会把个人 `.local` 数据或任何账号凭据打进安装包。
 - 加密记录不参加 iCloud 备份。可选 Supabase 同步已接入，1.3 版内置统一项目配置，用户用邮箱登录后自行开启，见 [云端同步](cloud-sync.md)。也可在设置中导出 JSON，再通过文件导入恢复学习记录。API 密钥和 ChatGPT 授权不随备份迁移，须在目标设备重新配置或登录。卸载前请手动备份。保存失败保留原记录；读取失败不会静默创建空账号。
 - 顶部、底部和横屏安全区域由 UIKit 提供，固定栏本身避开状态栏。手机不再显示常驻品牌栏。iPhone 16 Pro 模拟器检查由 `scripts/check-ios-simulator.sh` 执行。
