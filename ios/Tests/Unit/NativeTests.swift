@@ -1,0 +1,36 @@
+import XCTest
+@testable import App
+
+@MainActor final class NativeTests:XCTestCase {
+    func testNativeEngineGradesPreparesNextTaskAndKeepsBackupPortable()async throws{
+        let runtime=StudyRuntime(fixture:true)
+        XCTAssertNil(runtime.startupError)
+        var state=try await runtime.request("session/start",.object(["goal":.s("四级"),"mode":.s("写作")]))
+        let session=state["sessions"].list[0],task=session["current"]
+        XCTAssertEqual(task["questions"].list.count,2)
+        XCTAssertFalse(task["questions"].list[0]["answer"].exists)
+        state=try await runtime.request("session/answer",.object(["sessionId":session["id"],"taskId":task["id"],"answer":.s("[\"I had put the plates on the table.\",\"I would like to cook rice.\"]")]))
+        XCTAssertTrue(state["sessions"].list[0]["nextReady"].flag)
+        XCTAssertEqual(state["sessions"].list[0]["history"].list.count,1)
+        state=try await runtime.request("session/next",.object(["sessionId":session["id"],"taskId":task["id"]]))
+        XCTAssertNotEqual(state["sessions"].list[0]["current"]["id"],task["id"])
+        let backup=try await runtime.request("data/export")
+        XCTAssertEqual(backup["format"].text,"language-study-coach")
+        XCTAssertFalse(backup.json.contains("test-only"))
+    }
+    func testWrongOTPProducesVisibleMessageAndNeverLogsIn()async throws{
+        let runtime=StudyRuntime(fixture:true)
+        _ = try await runtime.request("sync/send-code",.object(["email":.s("qa@example.com")]))
+        do{_ = try await runtime.request("sync/verify",.object(["email":.s("qa@example.com"),"code":.s("000000")]));XCTFail("Invalid code was accepted")}
+        catch{XCTAssertTrue(error.localizedDescription.contains("验证码无效"))}
+        let status=try await runtime.request("sync/status");XCTAssertFalse(status["connected"].flag)
+        let result=try await runtime.request("sync/verify",.object(["email":.s("qa@example.com"),"code":.s("123456")]))
+        XCTAssertTrue(result["status"]["connected"].flag)
+    }
+    func testVaultKeepsExistingAESGCMFormat()throws{
+        let vault=StudyVault(),name="migration-test-"+UUID().uuidString
+        try vault.write(name,"{\"version\":1,\"sessions\":[]}")
+        defer{try? FileManager.default.removeItem(at:vault.directory.appendingPathComponent(name+".enc"))}
+        XCTAssertEqual(try vault.read(name),"{\"version\":1,\"sessions\":[]}")
+    }
+}

@@ -34,6 +34,10 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      - name: Generate native SwiftUI project
+        run: |
+          command -v xcodegen || brew install xcodegen
+          xcodegen generate --spec ios/project.yml --project ios/App
       - name: Import signing assets
         if: inputs.signed
         env:
@@ -74,6 +78,8 @@ jobs:
           path: |
             build/ios-simulator/*.png
             build/ios-simulator/*.log
+            build/ios-simulator/*.xcresult
+            build/ios-simulator/screenshots/
           if-no-files-found: warn
       - name: Remove temporary signing material
         if: always() && inputs.signed

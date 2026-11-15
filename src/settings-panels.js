@@ -25,16 +25,17 @@ export function renderDataSettings({preview,esc,button}) {
     </section>`;
 }
 
-export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button,captchaSiteKey='',captchaToken=''}) {
+export function renderSyncPanel({status:s,fields:f,preview,activity,error='',esc,button,captchaSiteKey='',captchaToken=''}) {
   const connected=s?.connected,enabled=s?.enabled;
   const label=!s?'正在读取…':!s.configured?'仅保存在本机':!connected?'尚未登录':enabled?(s.phase==='error'?'等待重试':'自动同步已开启'):'同步已暂停';
   return `<section id="sync-panel" class="settings-data dash-panel" aria-label="云端同步"><div class="sync-heading"><h2>云端同步</h2><span class="sync-badge ${enabled?'on':''}">${esc(label)}</span></div>
     <p>在手机和电脑上用同一个邮箱，接着积累你的学习记录。随时可以暂停。</p>
     ${activity?`<p role="status"><span class="spinner"></span>${esc(activity)}</p>`:''}
+    ${error?`<p id="sync-error" class="sync-warning" role="alert">${esc(error)}</p>`:''}
     ${s?.lastError?`<p class="sync-warning" role="status">${esc(s.lastError)}</p>`:''}
     ${s && !s.configured?'<p class="field-help">云端同步暂未开放，你可以继续在本机学习和导出备份。</p>':''}
     ${s?.configured && !connected?`<form id="sync-login-form"><label>同步邮箱<input id="sync-email" name="email" type="email" autocomplete="email" required value="${esc(f.email || s.email)}" ${s.bound?'readonly':''}></label>${captchaSiteKey?`<div id="sync-captcha" data-sitekey="${esc(captchaSiteKey)}" data-token="${esc(captchaToken)}"></div><p class="field-help">发送验证码前需要完成人机验证。</p>`:''}
-      <div class="form-actions">${button('发送验证码','sync-code','secondary-button',captchaSiteKey&&!captchaToken?'disabled':'')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}"></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
+      <div class="form-actions">${button('发送验证码','sync-code','secondary-button',captchaSiteKey&&!captchaToken?'disabled':'')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}" ${error?'aria-invalid="true" aria-describedby="sync-error"':''}></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
     ${connected?`<p class="sync-account">${esc(s.email)}</p><p class="field-help">同步学习记录、追问、能力画像及学习偏好。API 密钥与 AI 账号授权保留在各自设备。正在做的练习留在原设备，完成后合并到其他设备。</p>
       ${preview?`<div class="backup-preview" role="status"><strong>开启前确认</strong><p>本机有 ${preview.rounds} 轮练习、${preview.answers} 道作答，云端有 ${preview.cloudRecords} 条记录。开启后会自动上传和合并学习数据。</p><div class="form-actions">${button('确认开启同步','sync-confirm')}${button('暂不开启','sync-cancel','text-button')}</div></div>`:`<div class="form-actions">${enabled?button('立即同步','sync-now')+button('暂停同步','sync-disable','secondary-button'):button('开启自动同步','sync-preview')}${button('退出同步账号','sync-logout','text-button')}</div>`}
       <p class="field-help">${s.lastSync?`上次同步：${esc(new Date(s.lastSync).toLocaleString('zh-CN'))}`:'尚未完成首次同步'} · 退出账号会保留本机和云端记录。</p>`:''}

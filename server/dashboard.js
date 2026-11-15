@@ -25,7 +25,7 @@ export function dashboardData(state, timeZone = 'UTC', now = new Date()) {
   // Step through calendar dates, not local 24-hour intervals across DST changes.
   const today = Date.parse(`${day(now)}T12:00:00Z`);
   const dates = Array.from({ length: 7 }, (_, i) => new Date(today - (6 - i) * 86400000).toISOString().slice(0, 10));
-  const blank = () => ({ count: 0, correct: 0, seconds: 0, days: dates.map(date => ({ date, count: 0, seconds: 0 })) });
+  const blank = () => ({ count: 0, correct: 0, seconds: 0, days: dates.map(date => ({ date, count: 0, correct: 0, seconds: 0 })) });
   const totals = { all: blank() }, recent = [], perGoal = {};
   for (let i = state.sessions.length - 1; i >= 0; i--) {
     const s = state.sessions[i];
@@ -34,7 +34,7 @@ export function dashboardData(state, timeZone = 'UTC', now = new Date()) {
       const entryDay = h.at && new Date(h.at).getTime() >= now.getTime() - 8 * 86400000 ? day(h.at) : null;
       for (const bucket of [totals.all, totals[s.goal]]) {
         bucket.count++; bucket.correct += Number(h.feedback.correct); bucket.seconds += h.activeSeconds || 0;
-        if (entryDay) { const d = bucket.days.find(x => x.date === entryDay); if (d) { d.count++; d.seconds += h.activeSeconds || 0; } }
+        if (entryDay) { const d = bucket.days.find(x => x.date === entryDay); if (d) { d.count++; d.correct += Number(h.feedback.correct); d.seconds += h.activeSeconds || 0; } }
       }
     }
     if (s.finishedAt && (perGoal[s.goal] || 0) < 5) {

@@ -4,14 +4,14 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { createChatGPTAuth, consumeResponseStream } from '../server/chatgpt-auth.js';
 
 const pair=await generateKeyPair('RS256'),jwk={...await exportJWK(pair.publicKey),kid:'test',alg:'RS256',use:'sig'};
-function harness() {
+function harness({ plain = false } = {}) {
  let saved=null,authURL,invalidNonce=false,invalidAudience=false,denyScope=false,unsupportedRegion=false,refreshes=0,time=Date.now(),refreshFailure=false;
  const calls=[];
  const transport=async(url,options={})=>{
   calls.push({url,options});
   if(url.endsWith('jwks.json'))return Response.json({keys:[jwk]});
   if(url.endsWith('/oauth/token')) {
-   if(unsupportedRegion)return Response.json({error:{code:'unsupported_country_region_territory'}},{status:403});
+   if(unsupportedRegion)return plain ? {ok:false,status:403,json:async()=>({error:{code:'unsupported_country_region_territory'}})} : Response.json({error:{code:'unsupported_country_region_territory'}},{status:403});
    const p=new URLSearchParams(options.body),refresh=p.get('grant_type')==='refresh_token';
    if(refresh) {refreshes++;if(refreshFailure)return Response.json({error:'invalid_grant'},{status:400});}
    const idToken=await new SignJWT({nonce:invalidNonce?'bad':authURL.searchParams.get('nonce'),email:'learner@example.test'})
@@ -50,6 +50,11 @@ test('unsupported region returns a clear fallback message',async()=>{
  const h=harness();await h.start();h.unsupportedRegion=true;
  await assert.rejects(h.auth.finish(h.callback()),/当前不支持.*地区.*API Key/);
  assert.equal(h.saved().accounts.length,0);
+});
+
+test('native-style auth responses also expose the unsupported region message',async()=>{
+ const h=harness({plain:true});await h.start();h.unsupportedRegion=true;
+ await assert.rejects(h.auth.finish(h.callback()),/当前不支持.*地区.*API Key/);
 });
 
 test('invalid state, issuer audience, nonce and missing plan consent never replace credentials',async()=>{

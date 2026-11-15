@@ -9,7 +9,7 @@ const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 
 // Platform adapters own the callback listener and protected credential storage.
 // Tokens never appear in status responses, learner backups, or browser storage.
-export function createChatGPTAuth({ load, save, transport = fetch, now = Date.now }) {
+export function createChatGPTAuth({ load, save, transport = fetch, now = Date.now, identityVerifier }) {
   let credentials, pending, keys, refreshing, loading;
   async function state() {
     if(credentials) return credentials;
@@ -29,7 +29,7 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
   async function tokenRequest(params) {
     const response = await http(`${issuer}/api/accounts/oauth/token`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(params).toString() });
     if (!response.ok) {
-      let code=''; try { const details=await response.clone().json(); code=String(details?.error?.code || details?.code || ''); } catch { /* Keep a safe generic message. */ }
+      let code=''; try { const details=typeof response.clone==='function' ? await response.clone().json() : await response.json(); code=String(details?.error?.code || details?.code || ''); } catch { /* Keep a safe generic message. */ }
       if (code==='unsupported_country_region_territory') throw new AppError('OpenAI 当前不支持这个网络地区的 ChatGPT 账号授权。请在支持地区使用，或改用 API Key 服务商。',403);
       throw new AppError('ChatGPT 授权已失效或未获批准，请重新登录。', 401);
     }
@@ -38,6 +38,8 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
     return t;
   }
   async function validateIdentity(token, clientId, nonce) {
+    // Native SwiftUI hosts verify the same signed JWT with Security.framework.
+    if (identityVerifier) return identityVerifier({ token, clientId, nonce, now:now() });
     if (!keys) {
       const response = await http(`${issuer}/.well-known/jwks.json`);
       if (!response.ok) throw new AppError('暂时无法验证 ChatGPT 身份，请重试。', 502);

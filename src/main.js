@@ -3,9 +3,12 @@ import './style.css';
 import './dashboard.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Keyboard } from '@capacitor/keyboard';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
 const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
+document.documentElement.classList.toggle('native-app', native);
+if (native) document.querySelector('meta[name="viewport"]').content += ', maximum-scale=1.0, user-scalable=no';
 const defaultProvider = native ? 'openai' : 'codex';
 const captchaSiteKey = import.meta.env?.VITE_TURNSTILE_SITE_KEY || '';
 let nativeClient;
@@ -32,6 +35,7 @@ let pendingChat = null, chatScrollToEnd = true, starting = null;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
 let syncStatus=null,syncPreview=null,syncRunning=false;
+let syncError='';
 let captchaToken='',captchaScriptPromise=null;
 let updateState={status:'idle',error:'',data:null};
 const syncFields={email:'',code:''};
@@ -150,7 +154,7 @@ async function refreshAuth() {
     if(screen==='settings') render();
   }
 }
-function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFields,preview:syncPreview,activity:/同步|验证码|邮箱/.test(busy)?busy:'',esc,button,captchaSiteKey,captchaToken}); }
+function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFields,preview:syncPreview,error:syncError,activity:/同步|验证码|邮箱/.test(busy)?busy:'',esc,button,captchaSiteKey,captchaToken}); }
 function updatePanel() { return renderUpdatePanel({state:updateState,esc,button}); }
 function paintSync() {
   const panel=app.querySelector('#sync-panel');
@@ -176,12 +180,13 @@ async function checkAppUpdate() {
 async function syncAction(name,input={}) {
   if(syncRunning && !['disable','logout'].includes(name)) throw new Error('同步正在进行，请稍后重试。');
   syncRunning=true;
+  syncError='';
   try {
     const result=await request(`sync/${name}`,input);
     syncStatus=result.status;syncPreview=result.preview || null;
     if(result.state) {data=result.state;syncDraft();}
     return result;
-  } finally {syncRunning=false;}
+  } catch(e) {syncError=e.message;throw e;} finally {syncRunning=false;}
 }
 async function automaticSync() {
   if(busy || syncRunning || document.hidden || navigator.onLine===false) return;
@@ -213,7 +218,10 @@ async function run(label, fn) {
   if (busy) return;
   busy = label; error = ''; notice = ''; stopMedia(); render();
   try { await fn(); } catch (e) { error = e.message === 'Failed to fetch' ? (native ? '无法连接模型服务，请检查网络后重试。' : '无法连接本地服务，请确认 npm run dev 正在运行，再重试。') : e.message; }
-  finally { busy = ''; pendingChat = null; lastActivity = Date.now(); render(); }
+  finally {
+    busy = ''; pendingChat = null; lastActivity = Date.now(); render();
+    if (error && screen === 'settings') window.setTimeout(() => app.querySelector(syncError ? '#sync-error' : '.alert.error')?.scrollIntoView({ block:'center', inline:'nearest', behavior:'auto' }), 0);
+  }
 }
 function navigate(target) {
   stopMedia(); error = ''; notice = ''; screen = target;
@@ -247,6 +255,7 @@ function navigate(target) {
 }
 function selectGoal(value) { goal = value; localStorage.setItem('lsc-goal-v1', goal); navigate('home'); }
 function render() {
+  document.documentElement.classList.toggle('is-practicing', screen === 'session');
   const navScreen = ['activity','week','summary','practice'].includes(screen) ? 'home' : screen;
   const previousLog = app.querySelector('#chat-log');
   const previousScroll = previousLog?.scrollTop || 0;
@@ -573,7 +582,7 @@ app.addEventListener('submit', event => {
 app.addEventListener('keydown', event => {
   const card = event.target.closest?.('[data-action][role="link"]');
   if (card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); card.click(); return; }
-  if (!event.target.closest('#chat-composer') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  if (!event.target.closest('.chat-session') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
   if (event.target.classList.contains('task-text-answer')) {
     event.preventDefault();
     const fields = [...app.querySelectorAll('.task-text-answer')], index = fields.indexOf(event.target), next = fields[index + 1];
@@ -594,8 +603,45 @@ window.addEventListener('online',automaticSync);
 window.addEventListener('focus',automaticSync);
 setInterval(automaticSync,60000);
 window.addEventListener('pagehide', () => { stopMedia(); persistDraft(); });
-function updateViewport() { document.documentElement.style.setProperty('--app-height',`${window.visualViewport?.height || window.innerHeight}px`); }
-window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);updateViewport();
+let fieldScrollTimer;
+function scheduleFocusedField() {
+  clearTimeout(fieldScrollTimer);
+  fieldScrollTimer = setTimeout(() => keepFocusedFieldVisible(document.activeElement), 80);
+}
+function updateViewport() {
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--app-height',`${height}px`);
+  if (!native) document.documentElement.classList.toggle('keyboard-open', window.innerHeight - height > 120 && document.activeElement?.matches?.('input,textarea'));
+  scheduleFocusedField();
+}
+function keepFocusedFieldVisible(field) {
+  if (!field || !field.isConnected || !field.matches?.('input,textarea,select,[contenteditable="true"]')) return;
+  const viewport = window.visualViewport;
+  const top = viewport?.offsetTop || 0, bottom = top + (viewport?.height || window.innerHeight);
+  const rect = field.getBoundingClientRect(), log = field.closest('#chat-log'), margin = 16;
+  if (log) {
+    // Multi-question answer fields scroll inside the conversation, never by
+    // moving the entire WebView past the fixed composer.
+    const area = log.getBoundingClientRect(), visibleTop = Math.max(top, area.top) + margin, visibleBottom = Math.min(bottom, area.bottom) - margin;
+    if (rect.bottom > visibleBottom) log.scrollTop += Math.min(rect.bottom - visibleBottom, rect.top - visibleTop);
+    else if (rect.top < visibleTop) log.scrollTop -= visibleTop - rect.top;
+  } else if (!field.closest('.chat-bottom') && (rect.top < top + margin || rect.bottom > bottom - margin)) {
+    field.scrollIntoView({ block:'center', inline:'nearest', behavior:'auto' });
+  }
+}
+document.addEventListener('focusin', event => {
+  if (event.target.matches?.('input,textarea,select,[contenteditable="true"]')) scheduleFocusedField();
+});
+window.visualViewport?.addEventListener('resize',updateViewport);window.visualViewport?.addEventListener('scroll',updateViewport);window.addEventListener('resize',updateViewport);updateViewport();
+if (native) {
+  for (const name of ['keyboardWillShow', 'keyboardDidShow', 'keyboardWillHide', 'keyboardDidHide']) {
+    Keyboard.addListener(name, () => {
+      document.documentElement.classList.toggle('keyboard-open', name.endsWith('Show'));
+      updateViewport();
+    }).catch(e => console.warn('Keyboard listener unavailable', e));
+  }
+}
 if(native) deviceBridge.safeArea().then(i=>{for(const edge of ['top','bottom','left','right'])document.documentElement.style.setProperty(`--safe-${edge}`,`${i[edge]}px`);}).catch(()=>{});
 const chatGPTReturn = new URLSearchParams(location.search).get('chatgpt');
 if (chatGPTReturn) history.replaceState(null, '', location.pathname);

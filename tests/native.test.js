@@ -38,6 +38,20 @@ test('phone runs a round without a server, persists profile, hides Codex/import 
   assert.equal(state.config.apiKey, undefined);
 });
 
+test('native ChatGPT connection test and practice use the saved subscription without overriding modelCall', async () => {
+  const store = { load: async () => ({ value: undefined }), save: async () => {}, loadAuth: async () => ({ value: null }), saveAuth: async () => {}, loadSync: async () => ({ value: null }), saveSync: async () => {} };
+  const calls=[];
+  const chatgpt = { status: async () => ({ loggedIn: true, accounts: [], account: null }), complete: async (config, system) => { calls.push({config,system});return system===prompts.next?question(1):{ok:true}; } };
+  const client = await createNativeClient({ store, chatgpt });
+  await client.request('settings', { provider:'chatgpt',model:'saved-plan-model',baseURL:'https://api.openai.com/v1' });
+  await client.request('settings/test', {});
+  const state=await client.request('session/start', {goal:'日常英语',mode:'写作'});
+  assert.equal(calls.length,2);
+  assert.equal(calls[1].config.model,'saved-plan-model');
+  assert.equal(state.sessions[0].current.prompt,'Describe your day 1.');
+  client.close();
+});
+
 test('phone transport uses native HTTPS with bounded timeouts and no redirects', async () => {
   let options;
   const fetcher = nativeFetcher({ request: async value => { options = value; return { status: 200, data: { ok: true } }; } });

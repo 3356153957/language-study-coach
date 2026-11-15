@@ -8,9 +8,12 @@ DEVICE=$(xcrun simctl create LanguageStudyCoach-QA com.apple.CoreSimulator.SimDe
 trap 'xcrun simctl shutdown "$DEVICE" || true' EXIT
 xcrun simctl boot "$DEVICE"
 xcrun simctl bootstatus "$DEVICE" -b
+defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
 xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" build CODE_SIGNING_ALLOWED=NO > "$OUT/build.log" 2>&1 || { tail -80 "$OUT/build.log"; exit 1; }
 xcrun simctl status_bar "$DEVICE" override --time '9:41' --batteryState charged --batteryLevel 100
 xcrun simctl install "$DEVICE" "$OUT/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
 xcrun simctl launch "$DEVICE" com.languagestudycoach.app
 sleep 10
 xcrun simctl io "$DEVICE" screenshot "$OUT/iphone16pro.png"
+xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" -resultBundlePath "$OUT/NativeTests.xcresult" test CODE_SIGNING_ALLOWED=NO > "$OUT/tests.log" 2>&1 || { tail -100 "$OUT/tests.log"; exit 1; }
+xcrun xcresulttool export attachments --path "$OUT/NativeTests.xcresult" --output-path "$OUT/screenshots" || true

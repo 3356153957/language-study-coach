@@ -40,9 +40,9 @@ export function nativeSyncTransport(http = CapacitorHttp) {
   };
 }
 
-export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt, syncOptions={}, modelFetcher = nativeFetcher(),
-  modelCall = (config, system, context) => config?.provider==='chatgpt' ? auth.complete(config,system,context) : callModel(config, system, context, nativeFetcher()) } = {}) {
+export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt, syncOptions={}, modelFetcher = nativeFetcher(), modelCall } = {}) {
   const auth=chatgpt || createChatGPTAuth({load:async()=>{const {value}=await store.loadAuth();return value?JSON.parse(value):null;},save:async value=>{await store.saveAuth({value:JSON.stringify(value)});},transport:nativeAuthTransport()});
+  const effectiveModelCall = modelCall || ((config, system, context) => config?.provider==='chatgpt' ? auth.complete(config,system,context) : callModel(config, system, context, nativeFetcher()));
   let initialState;
   try {
     const { value } = await store.load();
@@ -51,7 +51,7 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
       if (initialState.version !== 1 || !Array.isArray(initialState.sessions)) throw new Error();
     }
   } catch { throw new AppError('手机学习记录无法读取。请重新打开应用；不要卸载，以免丢失记录。'); }
-  const engine = createEngine({ initialState, modelCall, modelFetcher, availableProviders: mobileProviders, allowImport: false,
+  const engine = createEngine({ initialState, modelCall: effectiveModelCall, modelFetcher, availableProviders: mobileProviders, allowImport: false,
     save: async state => {
       try { await store.save({ value: JSON.stringify(state) }); }
       catch { throw new AppError('手机存储失败，原有记录未覆盖，请检查可用空间后重试。'); }

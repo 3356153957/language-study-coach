@@ -1,0 +1,51 @@
+name: App
+options:
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    PRODUCT_BUNDLE_IDENTIFIER: com.languagestudycoach.app
+    MARKETING_VERSION: 2.0.0
+    CURRENT_PROJECT_VERSION: 8
+targets:
+  App:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/App/Native
+    resources:
+      - path: App/App/Assets.xcassets
+      - path: App/App/Base.lproj/LaunchScreen.storyboard
+      - path: App/App/NativeResources
+        type: folder
+    info:
+      path: App/App/Native/Info.plist
+      properties:
+        CFBundleDisplayName: Language Study Coach
+        UILaunchStoryboardName: LaunchScreen
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: '1,2'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_TESTABILITY: YES
+    scheme:
+      testTargets: [NativeTests, NativeUITests]
+  NativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests/Unit]
+    dependencies:
+      - target: App
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+  NativeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/UI]
+    dependencies:
+      - target: App
+    settings:
+      GENERATE_INFOPLIST_FILE: YES

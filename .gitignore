@@ -6,6 +6,9 @@ dist/
 .local/
 artifacts/
 build/
+output/
+.playwright-cli/
+ios/App/App/NativeResources/
 supabase/.temp/
 *.p12
 *.mobileprovision

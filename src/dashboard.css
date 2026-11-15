@@ -200,3 +200,29 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline:3px 
  .settings-data .form-actions { flex-wrap:wrap; }
  .chat-session-header h1 { font-size:13px; }
 }
+
+/* A practice screen owns one viewport. Only its conversation scrolls; the
+   question header and composer stay visible as the native keyboard resizes it. */
+.is-practicing, .is-practicing body { height:100%; overflow:hidden; }
+.session-shell { min-height:0; height:var(--app-height); display:flex; flex-direction:column; }
+.session-shell .topbar { flex:none; }
+.session-shell .chat-main { flex:1; min-height:0; display:flex; flex-direction:column; }
+.session-shell .chat-session { flex:1; min-height:0; height:auto; }
+.chat-log { min-width:0; min-height:0; overflow-x:hidden; }
+.chat-session .exercise-option > span { flex-shrink:0; }
+.chat-session .exercise-option strong { min-width:0; overflow-wrap:anywhere; }
+.native-app .shell { touch-action:pan-y; }
+.native-app input, .native-app select, .native-app textarea { font-size:16px; }
+.native-app .session-shell { --header-height:0px; }
+.native-app .session-shell .topnav { display:none; }
+.keyboard-open .chat-bottom { padding-bottom:8px; }
+.keyboard-open .chat-composer textarea { min-height:42px; max-height:88px; resize:none; }
+.keyboard-open .subscription-note { display:none; }
+@media(max-width:760px) {
+ .keyboard-open .topnav { display:none; }
+ .keyboard-open .main-content:not(.chat-main) { padding-bottom:24px; }
+ .keyboard-open .composer-header > span { display:none; }
+ .keyboard-open .composer-header { margin-bottom:0; }
+ input, select, textarea { font-size:16px !important; }
+ .chat-composer textarea, .task-text-answer { resize:none; }
+}
