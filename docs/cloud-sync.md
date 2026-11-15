@@ -12,6 +12,7 @@
 - Magic Link / OTP 与 Confirm Signup 均已保存验证码模板。真实邮件在 Resend 中显示 Delivered，本人已在隔离验收页输入验证码并成功登录。
 - 两个独立客户端使用该测试账号的同一会话访问真实云端，验证了上传、拉取合并、不重复写入、暂停，以及登录后查询其他用户 ID 返回空数组。网页版也实际预览、合并了 3 轮测试记录。测试别名与正式学习账号分开，没有上传正式学习记录；这不是两个独立设备登录或 iPhone 真机验收。
 - 当前 Resend 免费额度为每天 100 封、每月 3,000 封；Supabase SMTP 默认限制为每小时 30 封。账号数量与每日验证码封数不是同一概念。扩大发布前按实际用户量调整，见 [Resend 额度](https://resend.com/pricing) 与 [Supabase 发信限制](https://supabase.com/docs/guides/auth/rate-limits)。
+- 应用还会在服务端按邮箱哈希限制验证码：同一邮箱 60 秒冷却、15 分钟最多 5 次、自然日最多 10 次；验证码错误累计 8 次会暂时锁定。网页版 API 另按来源地址限频。验证码发送不会返回“账号是否存在”。生产环境建议同时启用 Supabase CAPTCHA Protection，推荐 Cloudflare Turnstile；将公开 Site Key 放入 `VITE_TURNSTILE_SITE_KEY`，把 Secret Key 只填入 Supabase Auth 的 CAPTCHA 设置，绝不提交仓库。Supabase 官方支持 hCaptcha 和 Turnstile，见 [CAPTCHA Protection](https://supabase.com/docs/guides/auth/auth-captcha)；Turnstile 在 iOS 需要通过 WKWebView 加载，允许 `challenges.cloudflare.com`，见 [Cloudflare 移动端说明](https://developers.cloudflare.com/turnstile/get-started/mobile-implementation/)。
 
 ## 维护者部署步骤
 

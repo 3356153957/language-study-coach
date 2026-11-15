@@ -1,6 +1,6 @@
 import { AppError, providers, validateConfig, validateAPIConnection, callModel } from './providers.js';
 import { listModels } from './model-catalog.js';
-import { goals, modes, prompts, gradingContext, validateTask, validateFeedback, validateLearnerAnswer, validateReport, validateReply } from './coach.js';
+import { goals, modes, skills, prompts, gradingContext, validateTask, validateFeedback, validateLearnerAnswer, validateReport, validateReply } from './coach.js';
 import { validateBackground } from './background.js';
 import { sharedProfile, examEvidence, examOutlook } from './profile.js';
 import { dashboardData, activityData } from './dashboard.js';
@@ -48,6 +48,22 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       return publicQuestion;
     });
     return answered ? { ...rest, answer } : rest;
+  }
+  function updateLiveProfile(s, entry) {
+    const previous = sharedProfile(s), previousSkills = previous?.skills || [];
+    const currentSkill = entry.task.skill;
+    s.profile = {
+      level: previous?.level || '正在了解你的水平',
+      summary: `已根据最近的${currentSkill}作答更新练习画像；完成更多题目后会继续校准。`,
+      nextFocus: entry.feedback.correct ? `继续练习${currentSkill}，观察在更高难度下是否稳定。` : `再练${currentSkill}中的“${entry.feedback.weakness || '本题知识点'}”，下一题会参考这次表现。`,
+      skills: skills.map(name => {
+        const saved = previousSkills.find(skill => skill.name === name && !skill.live);
+        if (name !== currentSkill) return saved || { name, level: '未测评', evidence: '还没有该能力的作答记录。' };
+        return { name, level: saved?.level || '练习中', evidence: `最近完成${entry.task.level}难度的${name}题，${entry.feedback.correct ? '本题回答正确。' : `需要巩固：${entry.feedback.weakness || '本题知识点'}。`}`, live: true };
+      }),
+      updatedAt: new Date().toISOString(),
+      live: true,
+    };
   }
   function context(s, session) {
     const history = round => round.history.map(entry => round.discussions?.[entry.task.id]?.length ? { ...entry, discussion: round.discussions[entry.task.id] } : entry);
@@ -144,6 +160,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         const feedback = validateFeedback(prepareNext ? result.feedback : result, session.current, answer);
         session.feedback = feedback;
         session.history.push({ id: randomUUID(), task: session.current, answer, feedback, ...telemetry, askedAt: session.currentAskedAt || session.startedAt, at: new Date().toISOString(), source: { provider: s.config.provider, model: s.config.model || 'Codex 默认模型' } });
+        updateLiveProfile(s, session.history.at(-1));
         session.prepared = null;
         session.nextPreparationError = '';
         if (prepareNext) {
@@ -185,7 +202,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
           const observed = new Set(s.sessions.flatMap(x => x.history).map(x => x.task.skill));
           const thisRound = new Set(session.history.map(x => x.task.skill));
           report.skills = report.skills.map(x => {
-            const saved = previous?.skills.find(skill => skill.name === x.name && skill.level !== '未测评');
+            const saved = previous?.skills.find(skill => skill.name === x.name && skill.level !== '未测评' && !skill.live);
             if (!thisRound.has(x.name) && saved) return saved;
             return observed.has(x.name) ? x : { name: x.name, level: '未测评', evidence: '还没有该能力的作答记录。' };
           });

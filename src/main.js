@@ -3,10 +3,11 @@ import './style.css';
 import './dashboard.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
+import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
 const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
 const defaultProvider = native ? 'openai' : 'codex';
+const captchaSiteKey = import.meta.env?.VITE_TURNSTILE_SITE_KEY || '';
 let nativeClient;
 
 import { icon, skillIcon, modeName } from './icons.js';
@@ -31,6 +32,8 @@ let pendingChat = null, chatScrollToEnd = true, starting = null;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
 let syncStatus=null,syncPreview=null,syncRunning=false;
+let captchaToken='',captchaScriptPromise=null;
+let updateState={status:'idle',error:'',data:null};
 const syncFields={email:'',code:''};
 let planWelcome = false;
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
@@ -147,13 +150,28 @@ async function refreshAuth() {
     if(screen==='settings') render();
   }
 }
-function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFields,preview:syncPreview,activity:/同步|验证码|邮箱/.test(busy)?busy:'',esc,button}); }
+function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFields,preview:syncPreview,activity:/同步|验证码|邮箱/.test(busy)?busy:'',esc,button,captchaSiteKey,captchaToken}); }
+function updatePanel() { return renderUpdatePanel({state:updateState,esc,button}); }
 function paintSync() {
   const panel=app.querySelector('#sync-panel');
   if(panel && !panel.contains(document.activeElement) && !busy) panel.outerHTML=syncPanel();
 }
 async function refreshSync() {
   try {syncStatus=await request('sync/status');paintSync();} catch(e) {if(screen==='settings'){error=e.message;render();}}
+}
+function ensureCaptchaWidget() {
+  if (!captchaSiteKey || screen !== 'settings') return;
+  const mount=app.querySelector('#sync-captcha'); if(!mount || mount.dataset.rendered==='1') return;
+  const renderWidget=()=>{ if(!window.turnstile || !app.contains(mount)) return; mount.dataset.rendered='1'; window.turnstile.render(mount,{sitekey:captchaSiteKey,appearance:'interaction-only',callback:token=>{captchaToken=String(token||'');const send=app.querySelector('[data-action="sync-code"]');if(send)send.disabled=!captchaToken;},'expired-callback':()=>{captchaToken='';const send=app.querySelector('[data-action="sync-code"]');if(send)send.disabled=true;},'error-callback':()=>{captchaToken='';}}); };
+  if(window.turnstile) return renderWidget();
+  captchaScriptPromise ||= new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.onload=resolve;script.onerror=reject;document.head.appendChild(script);});
+  captchaScriptPromise.then(renderWidget).catch(()=>{});
+}
+async function checkAppUpdate() {
+  updateState={status:'loading',error:'',data:null}; render();
+  try { updateState={status:'ready',error:'',data:await request('app/update')}; }
+  catch(e) { updateState={status:'error',error:e.message,data:null}; }
+  render();
 }
 async function syncAction(name,input={}) {
   if(syncRunning && !['disable','logout'].includes(name)) throw new Error('同步正在进行，请稍后重试。');
@@ -242,6 +260,7 @@ function render() {
       ${!data ? `<div class="empty-state"><h2>正在读取学习记录</h2><p>${native ? '学习记录保存在这台手机。' : '学习记录保存在这台电脑。'}</p>${button('重新连接', 'reload')}</div>` : page()}
     </main>${planWelcome?`<dialog class="plan-welcome" aria-modal="true" aria-label="你正在使用 ChatGPT 订阅"><h2>你正在使用 ChatGPT 订阅</h2><p>本应用中符合条件的出题、批改和追问会使用你的订阅额度。你可以在 ChatGPT 用量设置中管理限额或断开授权。</p>${button('知道了','plan-notice-close')}</dialog>`:''}</div>`;
   if(planWelcome) app.querySelector('.plan-welcome')?.showModal();
+  ensureCaptchaWidget();
   const log = app.querySelector('#chat-log');
   if (log) {
     // The first prompt should start at its top. Later turns stay anchored to the
@@ -276,7 +295,7 @@ function settings() {
     <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${sameSavedSource(cfg) && data.config?.hasKey ? '已保存；留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
     ${renderModelPicker({catalog:modelCatalog,cfg,busy,esc,button})}
     <div class="form-actions"><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>保存配置</button>${button('测试已保存的连接', 'test-connection', 'secondary-button', data.configured ? '' : 'disabled')}</div>`}</form>
-    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div>${renderDataSettings({preview:importPreview,esc,button})}${syncPanel()}</section>`;
+    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div>${renderDataSettings({preview:importPreview,esc,button})}${syncPanel()}${native?updatePanel():''}</section>`;
 }
 function codexPanel(cfg) {
   const status = codexStatus, login = status?.login;
@@ -361,9 +380,10 @@ app.addEventListener('click', async event => {
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
   if (action === 'models-refresh') return fetchModels();
+  if (action === 'app-update-check') return checkAppUpdate();
   if (action === 'models-mode') {modelCatalog.manual = !modelCatalog.manual; modelCatalog.query = ''; return paintModelPicker();}
   if(action==='plan-notice-close') {if(authStatus?.activeId)localStorage.setItem(`lsc-plan-notice-${authStatus.activeId}`,'seen');planWelcome=false;return render();}
-  if(action==='sync-code') return run('正在发送验证码…',async()=>{await syncAction('send-code',{email:syncFields.email || syncStatus?.email});notice='验证码已发送，请查看邮箱；一分钟后可重新发送。';});
+  if(action==='sync-code') return run('正在发送验证码…',async()=>{await syncAction('send-code',{email:syncFields.email || syncStatus?.email,captchaToken});notice='验证码已发送，请查看邮箱；一分钟后可重新发送。';captchaToken='';});
   if(action==='sync-cancel') {syncPreview=null;return render();}
   if(['sync-preview','sync-confirm','sync-disable','sync-logout','sync-now'].includes(action)) {
     const name={'sync-preview':'preview','sync-confirm':'enable','sync-disable':'disable','sync-logout':'logout','sync-now':'run'}[action];

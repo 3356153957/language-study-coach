@@ -156,6 +156,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .reading-translation span { display:block; margin-bottom: 6px; color: #8177c6; font-size: 11px; font-weight: 700; }
 .reading-translation p { line-height: 1.7; white-space: pre-wrap; }
 .task-text-answer { width:100%; min-height:78px; margin-top:10px; padding:12px; resize:vertical; border:1px solid #e2e2d9; border-radius:12px; background:#fffefa; color:var(--ink); font-size:13px; line-height:1.6; }
+.update-link { display:inline-flex; text-decoration:none; margin-top:8px; }
+.update-result { color: #5f5b7e; font-weight: 600; }
+.week-table-wrap { margin-top: 16px; overflow-x: auto; }
+.week-table { width:100%; border-collapse: collapse; font-size:11px; color:#777970; }
+.week-table th, .week-table td { padding:8px 6px; border-top:1px solid #ecebe3; text-align:right; white-space:nowrap; }
+.week-table th:first-child, .week-table td:first-child { text-align:left; }
+.week-table thead th { color:#a09f96; font-size:10px; font-weight:700; }
 .answer-label { display: block; color: #777970; font-size: 13px; }
 .conversation-input { font-size: 16px; min-height: 150px; }
 .voice-status { font-size: 12px; line-height: 1.5; }

@@ -3,6 +3,8 @@ import { createEngine } from '../server/engine.js';
 import { AppError, providers, callModel } from '../server/providers.js';
 import { createChatGPTAuth } from '../server/chatgpt-auth.js';
 import { createCloudSync } from '../server/cloud-sync.js';
+import { checkGitHubRelease } from './update.js';
+import { APP_VERSION } from './version.js';
 
 const storage = registerPlugin('StudyStorage');
 const device = registerPlugin('StudyDevice');
@@ -67,6 +69,10 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'review' && body === undefined) return engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'));
     if (path === 'data/export' && body === undefined) return engine.backup();
     if (path === 'data/preview') return engine.previewImport(body.backup);
+    if (path === 'app/update') return checkGitHubRelease({ fetcher: async (url, options) => {
+      const result = await CapacitorHttp.request({ url, method: 'GET', headers: options.headers, responseType: 'json', connectTimeout: 15000, readTimeout: 15000, disableRedirects: true });
+      return { ok: result.status >= 200 && result.status < 300, status: result.status, json: async () => result.data };
+    }, currentVersion: APP_VERSION });
     if(path==='sync/status') return sync.status();
     if(path.startsWith('sync/')) return {...await sync.action(path.slice(5),body || {}),state:engine.view({compact,timeZone})};
     if (path === 'chatgpt/status') return auth.status();

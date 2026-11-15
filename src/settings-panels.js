@@ -25,7 +25,7 @@ export function renderDataSettings({preview,esc,button}) {
     </section>`;
 }
 
-export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button}) {
+export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button,captchaSiteKey='',captchaToken=''}) {
   const connected=s?.connected,enabled=s?.enabled;
   const label=!s?'正在读取…':!s.configured?'仅保存在本机':!connected?'尚未登录':enabled?(s.phase==='error'?'等待重试':'自动同步已开启'):'同步已暂停';
   return `<section id="sync-panel" class="settings-data dash-panel" aria-label="云端同步"><div class="sync-heading"><h2>云端同步</h2><span class="sync-badge ${enabled?'on':''}">${esc(label)}</span></div>
@@ -33,13 +33,17 @@ export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button})
     ${activity?`<p role="status"><span class="spinner"></span>${esc(activity)}</p>`:''}
     ${s?.lastError?`<p class="sync-warning" role="status">${esc(s.lastError)}</p>`:''}
     ${s && !s.configured?'<p class="field-help">云端同步暂未开放，你可以继续在本机学习和导出备份。</p>':''}
-    ${s?.configured && !connected?`<form id="sync-login-form"><label>同步邮箱<input id="sync-email" name="email" type="email" autocomplete="email" required value="${esc(f.email || s.email)}" ${s.bound?'readonly':''}></label>
-      <div class="form-actions">${button('发送验证码','sync-code','secondary-button')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}"></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
+    ${s?.configured && !connected?`<form id="sync-login-form"><label>同步邮箱<input id="sync-email" name="email" type="email" autocomplete="email" required value="${esc(f.email || s.email)}" ${s.bound?'readonly':''}></label>${captchaSiteKey?`<div id="sync-captcha" data-sitekey="${esc(captchaSiteKey)}" data-token="${esc(captchaToken)}"></div><p class="field-help">发送验证码前需要完成人机验证。</p>`:''}
+      <div class="form-actions">${button('发送验证码','sync-code','secondary-button',captchaSiteKey&&!captchaToken?'disabled':'')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}"></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
     ${connected?`<p class="sync-account">${esc(s.email)}</p><p class="field-help">同步学习记录、追问、能力画像及学习偏好。API 密钥与 AI 账号授权保留在各自设备。正在做的练习留在原设备，完成后合并到其他设备。</p>
       ${preview?`<div class="backup-preview" role="status"><strong>开启前确认</strong><p>本机有 ${preview.rounds} 轮练习、${preview.answers} 道作答，云端有 ${preview.cloudRecords} 条记录。开启后会自动上传和合并学习数据。</p><div class="form-actions">${button('确认开启同步','sync-confirm')}${button('暂不开启','sync-cancel','text-button')}</div></div>`:`<div class="form-actions">${enabled?button('立即同步','sync-now')+button('暂停同步','sync-disable','secondary-button'):button('开启自动同步','sync-preview')}${button('退出同步账号','sync-logout','text-button')}</div>`}
       <p class="field-help">${s.lastSync?`上次同步：${esc(new Date(s.lastSync).toLocaleString('zh-CN'))}`:'尚未完成首次同步'} · 退出账号会保留本机和云端记录。</p>`:''}
     ${s?.conflicts?.length?`<p class="sync-warning" role="status">${s.conflicts.length} 条记录在两台设备上有不同修改，已保留两边内容并暂停这些记录的合并。可以先导出本机备份，其余记录继续同步。</p>`:''}
     </section>`;
+}
+
+export function renderUpdatePanel({state:u,esc,button}) {
+  return `<section class="settings-data dash-panel update-panel" aria-label="应用更新"><div class="sync-heading"><h2>应用更新</h2><span class="sync-badge">iOS</span></div><p>从 GitHub 检查 Language Study Coach 的最新版本。私有仓库需要在 GitHub 中登录后查看发布页。</p>${u?.status==='loading'?'<p role="status"><span class="spinner"></span>正在检查更新…</p>':''}${u?.error?`<p class="sync-warning" role="alert">${esc(u.error)}</p>`:''}${u?.data?`<p class="field-help">当前版本 ${esc(u.data.current)} · GitHub 最新版本 ${esc(u.data.latest)}</p><p class="update-result" role="status">${u.data.updateAvailable?'发现新版本，请打开发布页下载。':'当前已经是最新版本。'}</p>${u.data.releaseUrl?`<a class="secondary-button update-link" href="${esc(u.data.releaseUrl)}" target="_blank" rel="noopener noreferrer">打开 GitHub 发布页 ↗</a>`:''}`:''}<div class="form-actions">${button('检查更新','app-update-check','secondary-button',u?.status==='loading'?'disabled':'')}</div></section>`;
 }
 
 export function renderChatGPTPanel({status,loading,models,authURL,cfg,esc,button}) {

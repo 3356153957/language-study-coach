@@ -79,6 +79,19 @@ function authFactory({uid=A,clock=()=>Date.now(),counts={}}={}) {
   const session=()=>({access_token:`test-access-${uid}`,refresh_token:'test-refresh-private',expires_at:Math.floor(clock()/1000)+3600,user:{id:uid,email:uid===A?'a@example.com':'b@example.com'}});
   return ()=>({auth:{signInWithOtp:async()=>({error:null}),verifyOtp:async()=>({data:{session:session()}}),refreshSession:async()=>{counts.refresh=(counts.refresh || 0)+1;return {data:{session:session()}};}}});
 }
+
+test('email OTP carries CAPTCHA tokens and applies per-email cooldown and burst limits',async()=>{
+  let now=Date.now(),saved=null,captured,sendCount=0;
+  const engine=createEngine({save:async()=>{}});
+  const sync=createCloudSync({engine,load:async()=>saved,save:async value=>{saved=structuredClone(value);},now:()=>now,schedule:false,authFactory:()=>({auth:{signInWithOtp:async input=>{captured=input;sendCount++;return {error:null};},verifyOtp:async()=>({error:{status:400}})}})});
+  await sync.action('configure',config);
+  await sync.action('send-code',{email:'rate@example.com',captchaToken:'turnstile-token'});
+  assert.equal(captured.options.captchaToken,'turnstile-token');assert.equal(sendCount,1);
+  await assert.rejects(sync.action('send-code',{email:'rate@example.com'}),/稍等一分钟/);
+  for(let i=1;i<5;i++){now+=60000;await sync.action('send-code',{email:'rate@example.com'});}
+  now+=60000;await assert.rejects(sync.action('send-code',{email:'rate@example.com'}),/15 分钟/);
+  sync.close();
+});
 async function mockCloud() {
   const {db,as}=await database(),control={offline:false,uploads:[]};
   const transport=async(url,options)=>{

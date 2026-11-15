@@ -25,20 +25,24 @@ const emailValue=value=>{
 // Learning data and auth use different stores. Auth never leaves this controller.
 export function createCloudSync({load,save,engine,transport=fetch,authFactory=createClient,now=()=>Date.now(),schedule=true,defaultConfig}) {
   let state,initializing,client,clientConfig,queue=Promise.resolve(),timer,closed=false,phase='idle',lastError='',epoch=0;
-  let lastCodeAt=0,stopVersion=0;
+  let stopVersion=0;
+  const otpWindow=15*60*1000, otpCooldown=60*1000, otpWindowLimit=5, otpDayLimit=10, otpFailureLimit=8, otpLock=15*60*1000;
   const init=()=>initializing ||= (async()=>{
     const value=await load();
     if(value && (value.version!==1 || typeof value.known!=='object' || typeof value.conflicts!=='object')) throw new AppError('同步配置无法读取，本机学习记录仍然保留。');
     state=value || empty();
+    if(!state.otp || typeof state.otp!=='object' || typeof state.otp.emails!=='object') state.otp={version:1,emails:{}};
     if(defaultConfig) {
       const preset=validateSyncConfig(defaultConfig);
       if(state.owner && state.owner.project!==preset.url) throw new AppError('同步服务已调整，本机记录仍保留。请联系应用维护者迁移原同步账号。',409);
       if(state.config?.url!==preset.url && !state.owner) state=empty();
       state.config=preset;
     }
+    if(!state.otp || typeof state.otp!=='object' || typeof state.otp.emails!=='object') state.otp={version:1,emails:{}};
     if(state.config) validateSyncConfig(state.config);
   })();
   const persist=async()=>save(structuredClone(state));
+  const emailKey=async email=>fingerprint({purpose:'otp-rate-limit',email});
   const safeFetch=async(url,options={})=>{
     if(new URL(url).origin!==state.config.url) throw new AppError('同步请求地址不匹配。');
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
@@ -154,6 +158,11 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
     return {configured:!!state.config,managed:!!defaultConfig,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,
       conflicts:Object.values(state.conflicts).map(c=>({kind:c.record.kind,id:c.record.id})),bound:!!state.owner};
   }
+  function pruneOtp(nowValue) {
+    const entries=Object.entries(state.otp.emails);
+    if(entries.length<=5000) return;
+    for(const [key,guard] of entries) if(!guard.lastSentAt || nowValue-guard.lastSentAt>24*60*60*1000) delete state.otp.emails[key];
+  }
   async function perform(name,input={},requestedStop=stopVersion) {
     await init();
     if(name==='configure') {
@@ -164,15 +173,31 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
     } else if(name==='send-code') {
       const email=emailValue(input.email);
       if(state.owner && email!==state.owner.email.toLowerCase()) throw new AppError('请使用本机已绑定的邮箱登录，避免混入其他账号的数据。',409);
-      if(lastCodeAt && now()-lastCodeAt<60000) throw new AppError('验证码已发送，请稍等一分钟后再试。',429);
-      const {error}=await auth().signInWithOtp({email,options:{shouldCreateUser:true}});
+      const key=await emailKey(email), current=now(), day=new Date(current).toISOString().slice(0,10), guard=state.otp.emails[key] || {};
+      pruneOtp(current);
+      if(guard.lockedUntil && current<guard.lockedUntil) throw new AppError('请求过于频繁，请稍后再试。',429);
+      if(guard.lastSentAt && current-guard.lastSentAt<otpCooldown) throw new AppError('验证码已发送，请稍等一分钟后再试。',429);
+      const windowCount=guard.windowStartedAt && current-guard.windowStartedAt<otpWindow ? guard.sentInWindow || 0 : 0;
+      if(windowCount>=otpWindowLimit) throw new AppError('请求过于频繁，请 15 分钟后再试。',429);
+      if(guard.day===day && (guard.sentToday || 0)>=otpDayLimit) throw new AppError('今日验证码发送次数已达上限，请明天再试。',429);
+      const captchaToken=typeof input.captchaToken==='string' ? input.captchaToken.trim() : '';
+      const {error}=await auth().signInWithOtp({email,options:{shouldCreateUser:true,...(captchaToken?{captchaToken}:{})}});
       if(error) throw new AppError('验证码未能发送，请检查项目邮件设置或稍后重试。');
-      lastCodeAt=now();
+      state.otp.emails[key]={lastSentAt:current,windowStartedAt:guard.windowStartedAt && current-guard.windowStartedAt<otpWindow ? guard.windowStartedAt : current,sentInWindow:windowCount+1,day,sentToday:guard.day===day ? (guard.sentToday||0)+1 : 1,failedCount:0,lockedUntil:0};
+      await persist();
     } else if(name==='verify') {
       const email=emailValue(input.email),code=String(input.code || '').trim();
       if(!/^\d{6,8}$/.test(code)) throw new AppError('请输入邮件中的 6 至 8 位验证码。');
+      const key=await emailKey(email),current=now(),guard=state.otp.emails[key] || {};
+      if(guard.lockedUntil && current<guard.lockedUntil) throw new AppError('验证码尝试次数过多，请稍后再试。',429);
       const {data,error}=await auth().verifyOtp({email,token:code,type:'email'});
-      if(error || !data?.session) throw new AppError('验证码无效或已过期，请重新获取。');
+      if(error || !data?.session) {
+        const failed=(guard.failedCount||0)+1;
+        state.otp.emails[key]={...guard,failedCount:failed,lockedUntil:failed>=otpFailureLimit ? current+otpLock : 0};
+        await persist();
+        throw new AppError(failed>=otpFailureLimit ? '验证码尝试次数过多，请稍后再获取。' : '验证码无效或已过期，请重新获取。',failed>=otpFailureLimit ? 429 : 400);
+      }
+      delete state.otp.emails[key];
       storeSession(data.session);state.enabled=false;lastError='';await persist();
     } else if(name==='preview') {
       if(!state.session) throw new AppError('请先登录同步账号。',401);

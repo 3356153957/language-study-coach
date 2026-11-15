@@ -17,6 +17,16 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
   let state = { version: 1, config: null, profiles: {}, sessions: [] };
   try { state = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error('学习数据无法读取，请保留 .local/state.json 并检查文件。'); }
   let busy = false, chatgptLoginError = '';
+  const authAbuse = new Map();
+  function checkAuthRate(req, route) {
+    const now = Date.now(), address = req.socket?.remoteAddress || 'unknown', key = `${route}:${address}`, windowMs = route.endsWith('send-code') ? 60*60*1000 : 15*60*1000, limit = route.endsWith('send-code') ? 20 : 40;
+    for (const [k,v] of authAbuse) if (now-v.startedAt > windowMs) authAbuse.delete(k);
+    const current = authAbuse.get(key);
+    if (!current || now-current.startedAt > windowMs) { authAbuse.set(key,{startedAt:now,count:1,lastAt:now}); return; }
+    if (route.endsWith('send-code') && now-current.lastAt < 15000) throw new AppError('请求过于频繁，请稍后再试。',429);
+    if (current.count >= limit) throw new AppError('请求过于频繁，请稍后再试。',429);
+    current.count++; current.lastAt=now;
+  }
   const engine = createEngine({ initialState: state, modelCall, modelFetcher, codex, save: async draft => {
     await mkdir(directory, { recursive: true });
     await writeFile(`${file}.tmp`, JSON.stringify(draft, null, 2), { mode: 0o600 });
@@ -57,6 +67,7 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
       if (req.method === 'GET' && route === '/api/sync/status') return send(200,await sync.status());
       if (req.method !== 'POST') throw new AppError('请求方法不支持。', 405);
       if (req.headers['x-coach-request'] !== '1' || !req.headers['content-type']?.startsWith('application/json')) throw new AppError('请求来源或格式不正确。', 403);
+      if (route === '/api/sync/send-code' || route === '/api/sync/verify') checkAuthRate(req, route);
       // Cloud network requests must not occupy the learning/API transaction lock.
       // Their short local merge obtains the engine's lock independently.
       if(!route.startsWith('/api/sync/') && route !== '/api/settings/models') {
