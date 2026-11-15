@@ -30,6 +30,7 @@ const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
+let planWelcome = false;
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
 try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } catch { /* Replace invalid tab draft. */ }
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
@@ -90,7 +91,8 @@ async function refreshAuth() {
   authLoading=true; render();
   try {
     authStatus=await request('chatgpt/status');
-    if(authStatus.loggedIn) {authURL='';authModels=(await request('chatgpt/models')).models;}
+    if(authStatus.loginError) error=authStatus.loginError;
+    if(authStatus.loggedIn) {authURL='';planWelcome=!localStorage.getItem(`lsc-plan-notice-${authStatus.activeId}`);authModels=(await request('chatgpt/models')).models;}
     else if(!authStatus.login) authURL='';
   } catch(e) {error=e.message;}
   finally {
@@ -152,14 +154,14 @@ function render() {
   const previousScroll = previousLog?.scrollTop || 0;
   const nearEnd = !previousLog || previousLog.scrollHeight - previousScroll - previousLog.clientHeight < 100;
   app.innerHTML = `<div class="shell ${screen === 'session' ? 'session-shell' : ''}"><header class="topbar">
-    <button class="brand" data-action="home" ${busy ? 'disabled' : ''}><span class="brand-mark">L</span><span>Language Study Coach</span></button>
     <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['settings','设置']].map(([key, label]) => button(icon({home:'read',profile:'target',review:'history',settings:'settings'}[key]) + label, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
     </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
       ${busy && screen !== 'session' && screen !== 'starting' ? `<div class="busy-banner" role="status"><span class="spinner"></span>${esc(busy)}</div>` : ''}
       ${!data ? `<div class="empty-state"><h2>正在读取学习记录</h2><p>${native ? '学习记录保存在这台手机。' : '学习记录保存在这台电脑。'}</p>${button('重新连接', 'reload')}</div>` : page()}
-    </main></div>`;
+    </main>${planWelcome?`<dialog class="plan-welcome" aria-modal="true" aria-label="你正在使用 ChatGPT 订阅"><h2>你正在使用 ChatGPT 订阅</h2><p>本应用中符合条件的出题、批改和追问会使用你的订阅额度。你可以在 ChatGPT 用量设置中管理限额或断开授权。</p>${button('知道了','plan-notice-close')}</dialog>`:''}</div>`;
+  if(planWelcome) app.querySelector('.plan-welcome')?.showModal();
   const log = app.querySelector('#chat-log');
   if (log) {
     // The first prompt should start at its top. Later turns stay anchored to the
@@ -277,6 +279,7 @@ app.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
+  if(action==='plan-notice-close') {if(authStatus?.activeId)localStorage.setItem(`lsc-plan-notice-${authStatus.activeId}`,'seen');planWelcome=false;return render();}
   if(action==='data-export') return run('正在准备备份…',exportData);
   if(action==='data-pick') {
     if(!native) return app.querySelector('#backup-file').click();
@@ -290,7 +293,7 @@ app.addEventListener('click', async event => {
   if(action==='chatgpt-refresh') return refreshAuth();
   if(action==='chatgpt-login') return run(native?'请在官方页面完成 ChatGPT 授权…':'正在准备 ChatGPT 授权…',async()=>{
     const result=await request('chatgpt/login',{accountId:el.dataset.id});
-    if(native) {authStatus=result;authModels=(await request('chatgpt/models')).models;notice='你正在使用 ChatGPT 订阅授权。选择模型并保存即可使用，可在官方用量设置管理。';}
+    if(native) {authStatus=result;planWelcome=!localStorage.getItem(`lsc-plan-notice-${authStatus.activeId}`);authModels=(await request('chatgpt/models')).models;notice='ChatGPT 授权已完成，选择模型并保存即可使用。';}
     else {authURL=result.url;authStatus={...authStatus,login:{state:'pending'}};authPoll=setTimeout(refreshAuth,3000);}
   });
   if(['chatgpt-select','chatgpt-logout','chatgpt-cancel'].includes(action)) return run('正在更新 ChatGPT 授权…',async()=>{
@@ -419,6 +422,7 @@ app.addEventListener('keydown', event => {
   if (!event.target.closest('#chat-composer') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
   event.preventDefault(); app.querySelector(`[data-action="${event.target.id === 'coach-message' ? 'send-coach' : 'submit'}"]`)?.click();
 });
+app.addEventListener('cancel',event=>{if(event.target.matches('.plan-welcome')){event.preventDefault();app.querySelector('[data-action="plan-notice-close"]')?.click();}},true);
 ['pointerdown','keydown','input'].forEach(type => document.addEventListener(type, () => { lastActivity = Date.now(); }));
 document.addEventListener('visibilitychange', () => { lastActivity = Date.now(); if (document.hidden) { stopMedia(); persistDraft(); } else if (screen === 'session') render(); });
 setInterval(() => {

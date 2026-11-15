@@ -15,7 +15,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
   const file = path.join(directory, 'state.json');
   let state = { version: 1, config: null, profiles: {}, sessions: [] };
   try { state = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error('学习数据无法读取，请保留 .local/state.json 并检查文件。'); }
-  let busy = false;
+  let busy = false, chatgptLoginError = '';
   const engine = createEngine({ initialState: state, modelCall, codex, save: async draft => {
     await mkdir(directory, { recursive: true });
     await writeFile(`${file}.tmp`, JSON.stringify(draft, null, 2), { mode: 0o600 });
@@ -35,7 +35,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       if (origin && origin !== `http://${host}`) throw new AppError('不允许跨站访问学习数据。', 403);
       if (req.method==='GET' && route==='/auth/callback') {
         let message='ChatGPT 授权成功，请返回 Language Study Coach。',status=200;
-        try { await chatgpt.finish(`http://${host}${req.url}`); } catch(e) {status=400;message=e instanceof AppError?e.message:'授权未能保存，请返回应用重试。';}
+        try { await chatgpt.finish(`http://${host}${req.url}`); chatgptLoginError=''; } catch(e) {status=400;message=e instanceof AppError?e.message:'授权未能保存，请返回应用重试。';chatgptLoginError=message;}
         res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'",'Referrer-Policy':'no-referrer'});
         return res.end(`<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width"><title>ChatGPT 授权</title><h1>${message}</h1></html>`);
       }
@@ -45,7 +45,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       if (req.method === 'GET' && route === '/api/activity') return send(200, engine.activity(url.searchParams.get('offset')));
       if (req.method === 'GET' && route === '/api/review') return send(200, engine.review(url.searchParams.get('goal'), url.searchParams.get('offset')));
       if (req.method === 'GET' && route === '/api/codex/status') return send(200, await codex.status());
-      if (req.method === 'GET' && route === '/api/chatgpt/status') return send(200,await chatgpt.status());
+      if (req.method === 'GET' && route === '/api/chatgpt/status') return send(200,{...await chatgpt.status(),loginError:chatgptLoginError});
       if (req.method === 'GET' && route === '/api/chatgpt/models') return send(200,{models:await chatgpt.models()});
       if (req.method === 'GET' && route === '/api/data/export') return send(200,engine.backup());
       if (req.method !== 'POST') throw new AppError('请求方法不支持。', 405);
@@ -58,7 +58,7 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       let input;
       try { input = JSON.parse(raw); } catch { throw new AppError('请求不是有效 JSON。'); }
       if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('请求格式不正确。');
-      if (route === '/api/chatgpt/login') { const port=new URL(`http://${host}`).port; return send(200,await chatgpt.start(`http://127.0.0.1:${port}/auth/callback`,input.accountId)); }
+      if (route === '/api/chatgpt/login') { chatgptLoginError='';const port=new URL(`http://${host}`).port; return send(200,await chatgpt.start(`http://127.0.0.1:${port || 80}/auth/callback`,input.accountId)); }
       if (route === '/api/chatgpt/cancel') {chatgpt.cancel();return send(200,await chatgpt.status());}
       if (route === '/api/chatgpt/select') return send(200,await chatgpt.select(input.accountId));
       if (route === '/api/chatgpt/logout') return send(200,await chatgpt.logout());

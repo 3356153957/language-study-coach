@@ -222,6 +222,7 @@ public class StudyDevicePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDel
                         answered = true
                         let uri = "http://127.0.0.1:\(port.rawValue)/auth/callback"
                         self.redirectURI = uri; call.resolve(["redirectURI": uri])
+                        listener.stateUpdateHandler = nil
                     } else if case .failed = state, !answered { answered = true; self.closeAuth(); call.reject("无法启动本机授权回调") }
                 }
                 listener.newConnectionHandler = { connection in self.receiveCallback(connection) }

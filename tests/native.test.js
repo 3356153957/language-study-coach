@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNativeClient, nativeFetcher } from '../src/native-client.js';
+import { createNativeClient, nativeFetcher, nativeAuthTransport } from '../src/native-client.js';
 import { prompts, skills } from '../server/coach.js';
 
 const question = n => ({ kind: 'text', skill: '表达', level: 'A2', prompt: `Describe your day ${n}.`, passage: '', audio: '', options: [], answer: 'I read a book.', hint: '用一句完整句子。', reason: '从日常回答了解表达能力。' });
@@ -53,4 +53,14 @@ test('corrupt phone data is not silently replaced with an empty account', async 
   let saves = 0;
   await assert.rejects(createNativeClient({ store: { load: async () => ({ value: '{broken' }), save: async () => saves++ } }), /无法读取/);
   assert.equal(saves, 0);
+});
+
+test('native ChatGPT transport preserves encoded token forms, structures Responses JSON and retains SSE text',async()=>{
+  const calls=[];
+  const transport=nativeAuthTransport({request:async p=>{calls.push(p);return {status:200,data:'data: {"type":"response.completed"}\n\n'};}});
+  await transport('https://auth.openai.com/api/accounts/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=authorization_code&code=a%2Bb&client_id=issued'});
+  assert.equal(calls[0].data,'grant_type=authorization_code&code=a%2Bb&client_id=issued');
+  const response=await transport('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"store":false,"stream":true}'});
+  assert.deepEqual(calls[1].data,{store:false,stream:true});assert.equal(calls[1].disableRedirects,true);
+  assert.match(await response.text(),/response.completed/);
 });

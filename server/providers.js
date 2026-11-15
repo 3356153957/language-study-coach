@@ -17,7 +17,7 @@ export function validateConfig(input, previous = {}) {
   if (!preset) throw new AppError('请选择支持的接口类型。');
   if (input.provider === 'codex' || input.provider === 'chatgpt') {
     const model = String(input.model || '').trim();
-    if (model.length > 200 || /[\r\n]/.test(model)) throw new AppError('Codex 模型 ID 格式不正确。');
+    if (model.length > 200 || /[\r\n]/.test(model)) throw new AppError('模型 ID 格式不正确。');
     return { provider: input.provider, baseURL: input.provider === 'chatgpt' ? preset.baseURL : '', model };
   }
   const baseURL = String(input.baseURL || preset.baseURL).trim().replace(/\/+$/, '');

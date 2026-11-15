@@ -18,7 +18,11 @@ export function nativeFetcher(http = CapacitorHttp) {
 
 export function nativeAuthTransport(http = CapacitorHttp) {
   return async (url, options={}) => {
-    const r=await http.request({url,method:options.method || 'GET',headers:options.headers || {},data:options.body,responseType:'text',connectTimeout:15000,readTimeout:60000,disableRedirects:true});
+    const type=options.headers?.['Content-Type'] || '';
+    // Keep OAuth form strings byte-for-byte encoded (not encoded twice by the
+    // native adapter); use the adapter's structured encoding for Responses JSON.
+    const data=options.body===undefined ? undefined : type.includes('application/json') ? JSON.parse(options.body) : options.body;
+    const r=await http.request({url,method:options.method || 'GET',headers:options.headers || {},data,responseType:'text',connectTimeout:15000,readTimeout:60000,disableRedirects:true});
     return {ok:r.status>=200 && r.status<300,status:r.status,json:async()=>typeof r.data==='string'?JSON.parse(r.data):r.data,text:async()=>typeof r.data==='string'?r.data:JSON.stringify(r.data)};
   };
 }

@@ -10,14 +10,15 @@ const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 // Platform adapters own the callback listener and protected credential storage.
 // Tokens never appear in status responses, learner backups, or browser storage.
 export function createChatGPTAuth({ load, save, transport = fetch, now = Date.now }) {
-  let credentials, pending, keys, refreshing;
+  let credentials, pending, keys, refreshing, loading;
   async function state() {
-    if (!credentials) {
-      credentials = await load() || { hostId: `urn:uuid:${crypto.randomUUID()}`, accounts: [], activeId: null };
-      if (!credentials.hostId || !Array.isArray(credentials.accounts)) throw new AppError('ChatGPT 授权记录无法读取。');
-      await save(credentials);
-    }
-    return credentials;
+    if(credentials) return credentials;
+    loading ||= (async()=>{
+      const loaded=await load() || { hostId: `urn:uuid:${crypto.randomUUID()}`, accounts: [], activeId: null };
+      if (!loaded.hostId || !Array.isArray(loaded.accounts)) throw new AppError('ChatGPT 授权记录无法读取。');
+      await save(loaded); credentials=loaded; return credentials;
+    })().finally(()=>{loading=null;});
+    return loading;
   }
   async function commit(next) { await save(next); credentials = next; }
   const selected = s => s.accounts.find(a => a.id === s.activeId);
@@ -46,6 +47,7 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
   }
   async function status() {
     const s = await state(), a = selected(s);
+    if(pending?.expires < now()) pending=null;
     return { loggedIn: !!a?.access_token, activeId: s.activeId,
       accounts: s.accounts.map(a => ({ id:a.id, label:a.email || 'ChatGPT 账号', connected:!!a.access_token })),
       account: a ? { id:a.id, label:a.email || 'ChatGPT 账号' } : null,

@@ -159,6 +159,7 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline:3px 
    element alone lets it slide underneath the Dynamic Island. Native insets are
    supplied by UIKit when WKWebView's env() values are unavailable. */
 .topbar { height:calc(var(--header-height) + var(--safe-top)); min-height:calc(var(--header-height) + var(--safe-top)); padding-top:var(--safe-top); }
+.topbar { justify-content:center; }
 .chat-session { height:calc(var(--app-height) - var(--header-height) - var(--safe-top) - var(--safe-bottom) - 32px); min-height:0; }
 .main-content { padding-bottom:calc(42px + var(--safe-bottom)); }
 .chat-main { padding-bottom:12px; }
@@ -172,8 +173,11 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline:3px 
 .chatgpt-accounts button { min-height:44px; }
 .subscription-note { font-size:11px; color:#7e6b94; margin:0 0 8px; }
 .subscription-note a { color:inherit; margin-left:8px; }
+.plan-welcome { width:min(440px,calc(100% - 48px));background:#fff;border:0;border-radius:20px;padding:28px;margin:auto; }
+.plan-welcome::backdrop { background:#21193166; }
+.plan-welcome h2 { font-size:21px; }.plan-welcome p { font-size:14px;line-height:1.9;margin:16px 0 22px;color:#77707d; }
 @media(max-width:760px) {
- :root { --header-height:64px; }
+ :root { --header-height:0px; }
  .topbar { padding-top:var(--safe-top); }
  .main-content { padding-bottom:calc(96px + var(--safe-bottom)); }
  .chat-main { padding-bottom:0; }
