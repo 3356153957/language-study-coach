@@ -1,11 +1,20 @@
 # 启用云端同步
 
-代码已接入 Supabase 邮箱验证码登录与学习数据同步。当前尚未创建真实云项目，以下配置完成前不会上传正式学习记录，也无法验证真实邮件或手机与电脑之间的联网链路。
+统一 Supabase 免费项目 `language-study-coach` 已创建，数据库及账号隔离策略已部署。网页版与 iOS 1.3（build 4）已预设同一项目，普通用户只需邮箱和验证码。目前专用发信域名已通过 Resend 验证，SMTP 凭据及真实收件验证仍在配置中；这部分完成前，不代表邮箱登录已可用。
+
+## 当前部署
+
+- 项目编号：`ibaqkfpyueiozqmzxzsc`，区域 `us-east-1`，Free。
+- 网页开发服务已读取统一公开配置；GitHub Actions 的公开项目变量已设置。安装包内只含项目 URL 和 Publishable Key，不含管理密钥、发信密钥或学习记录。
+- 实际 SQL 检查确认两张表已启用 RLS、匿名不能读写、登录用户只读自己的记录、写入仅经版本检查函数。公开 HTTP 请求读取或调用写入 RPC 均返回 401。
+- 已撤销 Supabase 自动 RLS 管理函数对客户端的执行权限，自动 RLS 触发器仍开启。Security Advisor 为 0 errors、0 warnings；1 条提示是私有计数表没有客户端策略，这是刻意保留的拒绝访问规则。
+- 发件地址为 `login@study-mail.pocketfriend.cloud`，Resend 免费方案。阿里云新增专用子域名的 DKIM、两条发信 CNAME 和 DMARC，公开 DNS 已查到正确记录，Resend 显示域名 Verified / Ready，保留原有 4 条网站记录。打开和点击追踪保持关闭，发信凭据准备限定为仅可从该子域名发送邮件。
+- SMTP 尚未保存凭据，真实邮件、真人验证码登录与实际设备联网同步尚未验证；正式学习数据尚未开启上传。
 
 ## 创建并配置项目
 
 1. 在 [Supabase 控制台](https://supabase.com/dashboard) 创建一个项目，名称可填 `language-study-coach`。数据库密码只留在自己手里。
-2. 在项目的 SQL Editor 中完整运行 [数据库脚本](../supabase/migrations/202611150001_learning_sync.sql)。脚本可以重复执行，创建记录表、账号隔离策略和带版本检查的写入函数。不要关闭 RLS，也不要给客户端直接写表的权限。
+2. 在项目的 SQL Editor 中依次运行 [数据库脚本](../supabase/migrations/202611150001_learning_sync.sql) 和 [默认管理函数权限收紧](../supabase/migrations/20261115161216_harden_default_rls.sql)。脚本可以重复执行，创建记录表、账号隔离策略和带版本检查的写入函数。不要关闭 RLS，也不要给客户端直接写表的权限。
 3. 开启 Email 登录，允许新用户注册。在 Authentication 的邮件模板中，将 **Magic Link** 模板改为显示验证码，例如：
 
    ```html
@@ -14,7 +23,7 @@
    <p>如果不是你发起的登录，请忽略此邮件。</p>
    ```
 
-   如果项目的新用户确认邮件仍使用单独的 Confirm Signup 模板，也让它显示 `{{ .Token }}`。应用通过 `verifyOtp` 的 `email` 类型验证验证码，不依赖手机跳转链接。具体设置见 [Supabase OTP 官方说明](https://supabase.com/docs/guides/auth/auth-email-passwordless)。
+   可直接使用 [验证码邮件模板](../supabase/templates/email-otp.html)，主题为「Language Study Coach 登录验证码」。如果项目的新用户确认邮件仍使用单独的 Confirm Signup 模板，也让它显示 `{{ .Token }}`。当前免费项目需先配置自有 SMTP，控制台才开放编辑模板。应用通过 `verifyOtp` 的 `email` 类型验证验证码，不依赖手机跳转链接。具体设置见 [Supabase OTP 官方说明](https://supabase.com/docs/guides/auth/auth-email-passwordless)。
 4. 从项目 Connect / API Keys 页面复制 **Project URL** 和 **Publishable Key**（或旧版 `anon` 公开 Key）。不要复制 `Secret Key`、`service_role`、数据库密码或 JWT 签名密钥。公开 Key 配合用户登录令牌和 RLS 使用，见 [官方 Key 说明](https://supabase.com/docs/guides/api/api-keys)。
 5. Supabase 默认发信服务有收件人与速率限制。给其他人使用前配置自己的 SMTP 并测试收件；可参考 [官方 SMTP 说明](https://supabase.com/docs/guides/auth/auth-smtp)。不要因收不到邮件而关闭账号验证或 RLS。
 
@@ -51,10 +60,12 @@ GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Var
 
 ## 验证情况
 
-目前共 63 项本地检查通过。`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、批量上传途中暂停、保存失败回滚、登录绑定、令牌刷新与原生请求协议。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
+目前共 64 项本地检查通过。`tests/cloud-sync.test.js` 使用 PGlite 的真实 PostgreSQL 引擎运行迁移与 RLS，覆盖双账号隔离、直接写表拒绝、匿名拒绝、修订冲突、两设备合并、离线重试、批量上传途中暂停、保存失败回滚、登录绑定、令牌刷新与原生请求协议；新增检查确认平台管理函数保留所有者权限并拒绝客户端执行。HTTP 测试确认后台网络请求不占用练习请求锁、跨站写入被拒绝、状态接口不泄露令牌。
 
 `node scripts/preview-settings.js` 启动 5183 隔离页面；验证码、云端和邮件均为本地模拟，只验证交互，不访问真实 Supabase，也不使用正式学习记录。402 × 874 手机尺寸下已走通发送验证码和登录，确认没有项目参数表单、没有横向溢出。新版邮箱入口截图 `artifacts/cloud-sync-email-only.jpg`；前一轮完整预览、开启与暂停截图 `artifacts/cloud-sync-mobile.jpg`。
 
-真实项目部署、收件、真实账号授权及两台实际设备之间的联网同步仍待配置项目后验证。数据库和模拟协议测试通过，不代表这些线上环节已通过。
+正式网页版已确认「设置 → 云端同步」只有邮箱、验证码和登录按钮，没有项目配置表单；状态接口显示 `configured: true`、`managed: true`。截图为 `artifacts/cloud-sync-managed-web.jpg`，实际项目检查记录为 `artifacts/supabase-deployment.json`，公开 DNS 核验为 `artifacts/mail-dns-verification.json`。
 
-维护者当前正在接入统一项目，Supabase 控制台尚待本人登录或集成授权；尚未创建真实项目、配置发信服务或验证真实收件。
+iOS 1.3（build 4）已通过 63 项云构建测试、Swift 编译及 archive，并下载到 `build/ios-v1.3/LanguageStudyCoach-unsigned.ipa`。包完整性通过，网页脚本与使用相同公开项目配置的本地构建逐字节一致。后续新增的第 64 项测试仅验证数据库权限收紧，不改变应用资源。IPA 核验见同目录 `verification.json`。
+
+真实收件、真人账号授权及两台实际设备之间的联网同步仍待 SMTP 配置后验证。数据库部署和模拟协议测试通过，不代表这些线上环节已通过。

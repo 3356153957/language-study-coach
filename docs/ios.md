@@ -8,7 +8,7 @@
 - `server/engine.js` 提供可在手机执行的学习流程，保留批改同时备题、追问、错题和跨目标画像。
 - `src/native-client.js` 使用原生 HTTP 请求，HTTPS 地址、禁止自动跳转，连接超时 15 秒、读取超时 60 秒。
 - `StudyStoragePlugin` 用 AES-GCM 加密 API 配置及学习记录，密钥由本机 Keychain 保存；写文件采用原子替换。不会把个人 `.local` 数据或任何账号凭据打进安装包。
-- 加密记录不参加 iCloud 备份。可选 Supabase 同步已接入，需单独配置并开启，见 [云端同步](cloud-sync.md)。也可在设置中导出 JSON，再通过文件导入恢复学习记录。API 密钥和 ChatGPT 授权不随备份迁移，须在目标设备重新配置或登录。卸载前请手动备份。保存失败保留原记录；读取失败不会静默创建空账号。
+- 加密记录不参加 iCloud 备份。可选 Supabase 同步已接入，1.3 版内置统一项目配置，用户用邮箱登录后自行开启，见 [云端同步](cloud-sync.md)。也可在设置中导出 JSON，再通过文件导入恢复学习记录。API 密钥和 ChatGPT 授权不随备份迁移，须在目标设备重新配置或登录。卸载前请手动备份。保存失败保留原记录；读取失败不会静默创建空账号。
 - 顶部、底部和横屏安全区域由 UIKit 提供，固定栏本身避开状态栏。手机不再显示常驻品牌栏。iPhone 16 Pro 模拟器检查由 `scripts/check-ios-simulator.sh` 执行。
 - 听力仍用系统英语朗读；首版语音输入使用 iPhone 键盘听写。原生自带录音转写、发音评分后续再做。
 
@@ -58,9 +58,11 @@ iOS 使用系统 Safari 视图与仅监听 `127.0.0.1` 的临时回调，返回�
 
 设置提供导出和导入。手机用系统分享面板保存 JSON、文件选择器读取；网页使用下载和上传选择器。导入先预览再合并，以稳定 ID 去重，本机当前练习和模型配置保留，冲突不覆盖。账号凭据不导出。数据格式、边界和未来联网同步规划见 [数据迁移说明](data-portability.md)。
 
-## 云端同步（1.2）
+## 云端同步（1.3）
 
-共享同步逻辑已接入 iOS，`cloud-sync.enc` 与 ChatGPT 授权分开加密保存，凭据不会进入学习备份。可以构建时预设公开项目配置，也可以在设置中手动连接。项目创建、邮件模板、SMTP 和跨设备验证见 [配置说明](cloud-sync.md)。当前没有真实 Supabase 项目，联网链路尚未验证。
+共享同步逻辑已接入 iOS，`cloud-sync.enc` 与 ChatGPT 授权分开加密保存，凭据不会进入学习备份。1.3 版已内置统一项目公开配置，页面只提供邮箱与验证码，不提供普通用户配置表单。真实项目与数据库已部署；邮件模板、SMTP 和跨设备验证进度见 [配置说明](cloud-sync.md)。
+
+1.3（build 4）构建：[iOS IPA #43733272606](https://github.com/3356153957/language-study-coach/actions/runs/43733272606)，应用源码 `84d396a`，63 项云构建测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.3/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `a4ae0a31646f769a846fbf0969e97a65b2737368bf49b4b2576725dc04f0f95c`。确认内置真实项目的 Publishable Key，网页脚本与同配置本地构建逐字节一致，无正式学习数据或授权文件，核验见同目录 `verification.json`。后续第 64 项本地测试只涉及云数据库管理函数权限，不改变安装包资源。SMTP 凭据与真实收件仍在配置，签名安装和实际设备联网尚未验证。
 
 1.2（build 3）最终构建：[iOS IPA #43731162640](https://github.com/3356153957/language-study-coach/actions/runs/43731162640)，源码 `0c1cf67`，62 项测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.2/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `718cf906d699260c8145e7b83154e8cc67e48679d2e335ec70d9b2131cfade4b`。包内网页资源与使用同样空公开项目配置的本地构建逐字节一致；不包含正式学习数据或授权文件，完整核验见同目录 `verification.json`。
 

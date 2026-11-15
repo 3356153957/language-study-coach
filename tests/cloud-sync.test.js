@@ -39,6 +39,22 @@ async function database() {
 }
 const apply=(db,kind,id,payload,revision=0)=>db.query('select public.lsc_sync_apply($1,$2,$3::jsonb,$4) as result',[kind,id,JSON.stringify(payload),revision]).then(r=>r.rows[0].result);
 
+test('platform automatic-RLS helper keeps its owner privileges but cannot be executed by clients',async()=>{
+  const db=new PGlite();
+  try {
+    const migration=await readFile(new URL('../supabase/migrations/20261115161216_harden_default_rls.sql',import.meta.url),'utf8');
+    await db.exec('create role anon; create role authenticated;');
+    // Projects without the optional Supabase helper remain supported.
+    await db.exec(migration);
+    await db.exec(`create function public.rls_auto_enable() returns event_trigger language plpgsql security definer as $$ begin return; end; $$;`);
+    await db.exec(migration); await db.exec(migration);
+    const {rows}=await db.query(`select has_function_privilege('anon','public.rls_auto_enable()','execute') as anon,
+      has_function_privilege('authenticated','public.rls_auto_enable()','execute') as member,
+      has_function_privilege(current_user,'public.rls_auto_enable()','execute') as owner;`);
+    assert.deepEqual(rows,[{anon:false,member:false,owner:true}]);
+  } finally {await db.close();}
+});
+
 test('real PostgreSQL migration enforces account isolation, authenticated CAS, payload limits and denied direct writes',async()=>{
   const {db,as}=await database();
   try {
