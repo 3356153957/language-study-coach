@@ -62,7 +62,7 @@ iOS 使用系统 Safari 视图与仅监听 `127.0.0.1` 的临时回调，返回�
 
 共享同步逻辑已接入 iOS，`cloud-sync.enc` 与 ChatGPT 授权分开加密保存，凭据不会进入学习备份。1.3 版已内置统一项目公开配置，页面只提供邮箱与验证码，不提供普通用户配置表单。真实项目与数据库已部署；邮件模板、SMTP 和跨设备验证进度见 [配置说明](cloud-sync.md)。
 
-1.3（build 4）构建：[iOS IPA #43733272606](https://github.com/3356153957/language-study-coach/actions/runs/43733272606)，应用源码 `84d396a`，63 项云构建测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.3/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `a4ae0a31646f769a846fbf0969e97a65b2737368bf49b4b2576725dc04f0f95c`。确认内置真实项目的 Publishable Key，网页脚本与同配置本地构建逐字节一致，无正式学习数据或授权文件，核验见同目录 `verification.json`。后续第 64 项本地测试只涉及云数据库管理函数权限，不改变安装包资源。SMTP 凭据与真实收件仍在配置，签名安装和实际设备联网尚未验证。
+1.3（build 4）构建：[iOS IPA #43733272606](https://github.com/3356153957/language-study-coach/actions/runs/43733272606)，应用源码 `84d396a`，63 项云构建测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.3/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `a4ae0a31646f769a846fbf0969e97a65b2737368bf49b4b2576725dc04f0f95c`。确认内置真实项目的 Publishable Key，网页脚本与同配置本地构建逐字节一致，无正式学习数据或授权文件，核验见同目录 `verification.json`。后续第 64 项本地测试只涉及云数据库管理函数权限，不改变安装包资源。SMTP 及验证码模板已配置，真实收件、验证码登录与双客户端联网已在隔离环境通过；签名安装、两次独立设备登录和 iPhone 真机联网尚未验证。
 
 1.2（build 3）最终构建：[iOS IPA #43731162640](https://github.com/3356153957/language-study-coach/actions/runs/43731162640)，源码 `0c1cf67`，62 项测试、Swift 编译、archive 和下载核验通过。文件为 `build/ios-v1.2/LanguageStudyCoach-unsigned.ipa`，SHA-256 为 `718cf906d699260c8145e7b83154e8cc67e48679d2e335ec70d9b2131cfade4b`。包内网页资源与使用同样空公开项目配置的本地构建逐字节一致；不包含正式学习数据或授权文件，完整核验见同目录 `verification.json`。
 

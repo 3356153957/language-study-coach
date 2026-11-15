@@ -1,6 +1,6 @@
 # 启用云端同步
 
-统一 Supabase 免费项目 `language-study-coach` 已创建，数据库及账号隔离策略已部署。网页版与 iOS 1.3（build 4）已预设同一项目，普通用户只需邮箱和验证码。目前专用发信域名已通过 Resend 验证，SMTP 凭据及真实收件验证仍在配置中；这部分完成前，不代表邮箱登录已可用。
+统一 Supabase 免费项目 `language-study-coach`、数据库隔离、专用 SMTP 和验证码模板均已配置。网页版与 iOS 1.3（build 4）已预设同一项目，普通用户只需邮箱和验证码。已用独立测试邮箱完成真实收件、验证码登录和联网同步，不需要用户填写项目地址或密钥。
 
 ## 当前部署
 
@@ -8,10 +8,12 @@
 - 网页开发服务已读取统一公开配置；GitHub Actions 的公开项目变量已设置。安装包内只含项目 URL 和 Publishable Key，不含管理密钥、发信密钥或学习记录。
 - 实际 SQL 检查确认两张表已启用 RLS、匿名不能读写、登录用户只读自己的记录、写入仅经版本检查函数。公开 HTTP 请求读取或调用写入 RPC 均返回 401。
 - 已撤销 Supabase 自动 RLS 管理函数对客户端的执行权限，自动 RLS 触发器仍开启。Security Advisor 为 0 errors、0 warnings；1 条提示是私有计数表没有客户端策略，这是刻意保留的拒绝访问规则。
-- 发件地址为 `login@study-mail.pocketfriend.cloud`，Resend 免费方案。阿里云新增专用子域名的 DKIM、两条发信 CNAME 和 DMARC，公开 DNS 已查到正确记录，Resend 显示域名 Verified / Ready，保留原有 4 条网站记录。打开和点击追踪保持关闭，发信凭据准备限定为仅可从该子域名发送邮件。
-- SMTP 尚未保存凭据，真实邮件、真人验证码登录与实际设备联网同步尚未验证；正式学习数据尚未开启上传。
+- 发件地址为 `login@study-mail.pocketfriend.cloud`，Resend 免费方案。阿里云新增专用子域名的 DKIM、两条发信 CNAME 和 DMARC，公开 DNS 已查到正确记录，Resend 显示域名 Verified / Ready，保留原有 4 条网站记录。打开和点击追踪保持关闭，发信凭据仅可从该子域名发送邮件，由账号本人在 Supabase 中输入并保存，不进入源码或安装包。
+- Magic Link / OTP 与 Confirm Signup 均已保存验证码模板。真实邮件在 Resend 中显示 Delivered，本人已在隔离验收页输入验证码并成功登录。
+- 两个独立客户端使用该测试账号的同一会话访问真实云端，验证了上传、拉取合并、不重复写入、暂停，以及登录后查询其他用户 ID 返回空数组。网页版也实际预览、合并了 3 轮测试记录。测试别名与正式学习账号分开，没有上传正式学习记录；这不是两个独立设备登录或 iPhone 真机验收。
+- 当前 Resend 免费额度为每天 100 封、每月 3,000 封；Supabase SMTP 默认限制为每小时 30 封。账号数量与每日验证码封数不是同一概念。扩大发布前按实际用户量调整，见 [Resend 额度](https://resend.com/pricing) 与 [Supabase 发信限制](https://supabase.com/docs/guides/auth/rate-limits)。
 
-## 创建并配置项目
+## 维护者部署步骤
 
 1. 在 [Supabase 控制台](https://supabase.com/dashboard) 创建一个项目，名称可填 `language-study-coach`。数据库密码只留在自己手里。
 2. 在项目的 SQL Editor 中依次运行 [数据库脚本](../supabase/migrations/202611150001_learning_sync.sql) 和 [默认管理函数权限收紧](../supabase/migrations/20261115161216_harden_default_rls.sql)。脚本可以重复执行，创建记录表、账号隔离策略和带版本检查的写入函数。不要关闭 RLS，也不要给客户端直接写表的权限。
@@ -68,4 +70,4 @@ GitHub 云构建在仓库 Settings → Secrets and variables → Actions → Var
 
 iOS 1.3（build 4）已通过 63 项云构建测试、Swift 编译及 archive，并下载到 `build/ios-v1.3/LanguageStudyCoach-unsigned.ipa`。包完整性通过，网页脚本与使用相同公开项目配置的本地构建逐字节一致。后续新增的第 64 项测试仅验证数据库权限收紧，不改变应用资源。IPA 核验见同目录 `verification.json`。
 
-真实收件、真人账号授权及两台实际设备之间的联网同步仍待 SMTP 配置后验证。数据库部署和模拟协议测试通过，不代表这些线上环节已通过。
+真实收件、验证码登录和真实项目双客户端联网已验证，记录为 `artifacts/real-cloud-sync-verification.json`。投递截图为 `artifacts/real-email-delivered.jpg`，开启预览为 `artifacts/real-sync-preview.jpg`，完成合并后的页面为 `artifacts/real-sync-completed.jpg`。两个客户端复用同一测试会话，尚未验收两次独立设备登录、iPhone 真机同步或签名安装，不能把本次联网结果当成这些环节已经通过。
