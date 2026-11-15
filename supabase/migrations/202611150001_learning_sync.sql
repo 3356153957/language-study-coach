@@ -8,6 +8,7 @@ create table if not exists lsc_private.sync_clocks (
   user_id uuid primary key references auth.users(id) on delete cascade,
   revision bigint not null default 0
 );
+alter table lsc_private.sync_clocks enable row level security;
 revoke all on lsc_private.sync_clocks from public, anon, authenticated;
 
 create table if not exists public.lsc_sync_records (
