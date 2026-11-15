@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.local/
+artifacts/
+build/
+*.p12
+*.mobileprovision
