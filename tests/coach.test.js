@@ -381,3 +381,18 @@ test('open multi-question writing uses one answer box per prompt and accepts JSO
   assert.equal(result.status, 200);
   assert.equal(result.body.sessions[0].history[0].answer, answer);
 });
+
+test('ChatGPT callback returns the app to the settings state after authorization', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'lsc-auth-callback-'));
+  const api = await createAPI({ directory, modelCall: async () => ({ ok: true }), codex: { close() {}, status: async () => ({ loggedIn: false }) }, chatgpt: {
+    finish: async () => ({ loggedIn: true }), status: async () => ({ loggedIn: true }), models: async () => [], complete: async () => ({ ok: true }),
+  } });
+  const server = createServer((req, res) => api(req, res, () => { res.writeHead(404); res.end(); }));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => { api.close(); server.close(resolve); }));
+  const port = server.address().port;
+  const response = await fetch(`http://127.0.0.1:${port}/auth/callback?code=test&state=test`);
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(html, /\?chatgpt=callback/);
+});
