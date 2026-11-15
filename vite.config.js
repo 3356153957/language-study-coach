@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { createAPI } from './server/api.js';
 
 async function attachAPI(server) {
-  const api = await createAPI({ directory: fileURLToPath(new URL('./.local/', import.meta.url)) });
+  const env=server.config.env;
+  const api = await createAPI({ directory: fileURLToPath(new URL('./.local/', import.meta.url)),syncOptions:{
+    defaultConfig:env.VITE_SUPABASE_URL && env.VITE_SUPABASE_PUBLISHABLE_KEY ? {url:env.VITE_SUPABASE_URL,publishableKey:env.VITE_SUPABASE_PUBLISHABLE_KEY}:undefined,
+  } });
   server.middlewares.use(api);
   server.httpServer?.once('close', api.close);
 }

@@ -42,6 +42,8 @@ public class StudyStoragePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "save", returnType: CAPPluginReturnPromise)
         ,CAPPluginMethod(name: "loadAuth", returnType: CAPPluginReturnPromise)
         ,CAPPluginMethod(name: "saveAuth", returnType: CAPPluginReturnPromise)
+        ,CAPPluginMethod(name: "loadSync", returnType: CAPPluginReturnPromise)
+        ,CAPPluginMethod(name: "saveSync", returnType: CAPPluginReturnPromise)
     ]
     private let queue = DispatchQueue(label: "com.languagestudycoach.storage")
 
@@ -135,6 +137,33 @@ public class StudyStoragePlugin: CAPPlugin, CAPBridgedPlugin {
                 try url.setResourceValues(values)
                 call.resolve()
             } catch { call.reject("无法保存 ChatGPT 授权") }
+        }
+    }
+
+    @objc public func loadSync(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let url = try self.fileURL("cloud-sync.enc")
+                guard FileManager.default.fileExists(atPath: url.path) else { call.resolve(["value": NSNull()]); return }
+                let box = try AES.GCM.SealedBox(combined: Data(contentsOf: url))
+                let clear = try AES.GCM.open(box, using: self.key(create: false))
+                guard let value = String(data: clear, encoding: .utf8) else { call.reject("同步配置编码无效"); return }
+                call.resolve(["value": value])
+            } catch { call.reject("无法读取同步配置") }
+        }
+    }
+    @objc public func saveSync(_ call: CAPPluginCall) {
+        guard let value = call.getString("value"), let clear = value.data(using: .utf8) else { call.reject("缺少同步配置"); return }
+        queue.async {
+            do {
+                var url = try self.fileURL("cloud-sync.enc")
+                let box = try AES.GCM.seal(clear, using: self.key(create: true))
+                guard let encrypted = box.combined else { call.reject("同步配置加密失败"); return }
+                try encrypted.write(to: url, options: [.atomic, .completeFileProtection])
+                var values = URLResourceValues(); values.isExcludedFromBackup = true
+                try url.setResourceValues(values)
+                call.resolve()
+            } catch { call.reject("无法保存同步配置") }
         }
     }
 }

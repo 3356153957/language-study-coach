@@ -5,8 +5,9 @@ import { CodexBridge } from './codex.js';
 import { createEngine } from './engine.js';
 import { createChatGPTAuth } from './chatgpt-auth.js';
 import { backupLimit } from './backup.js';
+import { createCloudSync } from './cloud-sync.js';
 
-export async function createAPI({ directory, modelCall, codex = new CodexBridge({ directory }), chatgpt } = {}) {
+export async function createAPI({ directory, modelCall, codex = new CodexBridge({ directory }), chatgpt, syncOptions={} } = {}) {
   chatgpt ||= createChatGPTAuth({
     load:async()=>{try{return JSON.parse(await readFile(path.join(directory,'chatgpt-auth.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new AppError('ChatGPT 授权文件无法读取。');}},
     save:async value=>{await mkdir(directory,{recursive:true});const file=path.join(directory,'chatgpt-auth.json');await writeFile(`${file}.tmp`,JSON.stringify(value),{mode:0o600});await rename(`${file}.tmp`,file);},
@@ -21,6 +22,10 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
     await writeFile(`${file}.tmp`, JSON.stringify(draft, null, 2), { mode: 0o600 });
     await rename(`${file}.tmp`, file);
   }});
+  const sync=createCloudSync({engine,
+    load:async()=>{try{return JSON.parse(await readFile(path.join(directory,'cloud-sync.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new AppError('同步配置无法读取，请保留原文件后重试。');}},
+    save:async value=>{await mkdir(directory,{recursive:true});const f=path.join(directory,'cloud-sync.json');await writeFile(`${f}.tmp`,JSON.stringify(value),{mode:0o600});await rename(`${f}.tmp`,f);},
+    ...syncOptions});
   const api = async function (req, res, nextHandler) {
     const url = new URL(req.url, 'http://localhost');
     const route = url.pathname;
@@ -48,16 +53,25 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       if (req.method === 'GET' && route === '/api/chatgpt/status') return send(200,{...await chatgpt.status(),loginError:chatgptLoginError});
       if (req.method === 'GET' && route === '/api/chatgpt/models') return send(200,{models:await chatgpt.models()});
       if (req.method === 'GET' && route === '/api/data/export') return send(200,engine.backup());
+      if (req.method === 'GET' && route === '/api/sync/status') return send(200,await sync.status());
       if (req.method !== 'POST') throw new AppError('请求方法不支持。', 405);
       if (req.headers['x-coach-request'] !== '1' || !req.headers['content-type']?.startsWith('application/json')) throw new AppError('请求来源或格式不正确。', 403);
-      if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
-      busy = true; ownsLock = true;
+      // Cloud network requests must not occupy the learning/API transaction lock.
+      // Their short local merge obtains the engine's lock independently.
+      if(!route.startsWith('/api/sync/')) {
+        if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
+        busy = true; ownsLock = true;
+      }
       let raw = '';
       const limit=route.startsWith('/api/data/')?backupLimit+1000:100000;
       for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) throw new AppError('请求内容过长。', 413); }
       let input;
       try { input = JSON.parse(raw); } catch { throw new AppError('请求不是有效 JSON。'); }
       if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('请求格式不正确。');
+      if(route.startsWith('/api/sync/')) {
+        const result=await sync.action(route.slice('/api/sync/'.length),input);
+        return send(200,{...result,state:engine.view(viewOptions)});
+      }
       if (route === '/api/chatgpt/login') { chatgptLoginError='';const port=new URL(`http://${host}`).port; return send(200,await chatgpt.start(`http://127.0.0.1:${port || 80}/auth/callback`,input.accountId)); }
       if (route === '/api/chatgpt/cancel') {chatgpt.cancel();return send(200,await chatgpt.status());}
       if (route === '/api/chatgpt/select') return send(200,await chatgpt.select(input.accountId));
@@ -66,11 +80,13 @@ export async function createAPI({ directory, modelCall, codex = new CodexBridge(
       if (route === '/api/settings' && input.provider==='chatgpt' && !(await chatgpt.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
       if (route === '/api/codex/login') return send(200, await codex.loginStart(input.type));
       if (route === '/api/codex/login/cancel') { await codex.cancelLogin(); return send(200, await codex.status()); }
-      send(200, await engine.execute(route, input, viewOptions));
+      const result=await engine.execute(route, input, viewOptions);
+      if(route.startsWith('/api/session/') || route==='/api/data/import' || route==='/api/background/import') sync.notifyChange();
+      send(200,result);
     } catch (error) {
       send(error.status || 500, { error: error instanceof AppError ? error.message : '本地服务处理失败，数据未更新，请检查磁盘空间后重试。' });
     } finally { if (ownsLock) busy = false; }
   };
-  api.close = () => codex.close();
+  api.close = () => {sync.close();codex.close();};
   return api;
 }

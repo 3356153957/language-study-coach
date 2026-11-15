@@ -4,6 +4,7 @@ import { validateBackground } from './background.js';
 import { sharedProfile, examEvidence, examOutlook } from './profile.js';
 import { dashboardData, activityData } from './dashboard.js';
 import { exportBackup, planImport } from './backup.js';
+import { canonical, recordsFromBackup, recordKey, reconcile, mergeCloudRecords } from './sync-records.js';
 
 
 const randomUUID = () => globalThis.crypto.randomUUID();
@@ -201,6 +202,21 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   return {
     view, detail, review, profile, activity: offset => activityData(state, offset),
     backup: () => exportBackup(state), previewImport: input => planImport(state,input).summary,
+    async mergeCloud(records) {
+      if(busy) throw new AppError('正在保存本次练习，稍后自动重试同步。',409);
+      busy=true;
+      try {
+        const local=new Map(recordsFromBackup(exportBackup(state)).map(r=>[recordKey(r),r]));
+        const changes=records.filter(r=>{
+          const old=local.get(recordKey(r));
+          if(old && !reconcile(old,r)) throw new AppError('练习进度刚刚变化，稍后自动重新合并。',409);
+          return !old || canonical(old.payload)!==canonical(r.payload);
+        });
+        if(!changes.length) return;
+        const draft=mergeCloudRecords(state,changes);
+        await save(draft);state=draft;
+      } finally {busy=false;}
+    },
     async execute(route, input, options) {
       if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
       busy = true;

@@ -167,6 +167,18 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline:3px 
 .settings-data h2 { font-size:20px; margin-bottom:12px; }
 .settings-data p { font-size:13px; line-height:1.9; color:var(--muted); }
 .backup-preview { border:1px solid #d9cdec; background:#f7f3fc; padding:18px; border-radius:12px; margin-top:18px; }
+.sync-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.sync-heading h2 { margin:0; }
+.sync-badge { font-size:11px;padding:6px 10px;border-radius:20px;background:#efeee8;color:#66675e; }
+.sync-badge.on { background:#eaf4ec;color:#39724b; }
+.sync-setup { margin:18px 0; }
+.sync-setup summary { cursor:pointer;font-size:13px;color:var(--ink);padding:10px 0; }
+#sync-panel label { display:grid;gap:8px;font-size:13px;margin:18px 0 12px; }
+#sync-panel input { width:100%;min-width:0;padding:13px 14px;border:1px solid #deded5;border-radius:10px;background:var(--paper,#fffefb);color:var(--ink);font:inherit;font-size:16px; }
+#sync-panel input:focus { outline:2px solid var(--violet);outline-offset:2px; }
+#sync-panel input[readonly] { color:#777; }
+#sync-panel .sync-account { font-weight:600;color:var(--ink);overflow-wrap:anywhere; }
+#sync-panel .sync-warning { color:#875121;background:#fff4e5;padding:12px 14px;border-radius:10px; }
 .chatgpt-signin { background:#202123; color:#fff; border:0; border-radius:10px; padding:13px 20px; min-height:46px; }
 .chatgpt-signin:hover { background:#353638; }
 .chatgpt-accounts { display:grid; gap:10px; margin:16px 0; }

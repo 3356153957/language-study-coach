@@ -30,6 +30,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run ios:sync
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       - name: Import signing assets
         if: inputs.signed
         env:

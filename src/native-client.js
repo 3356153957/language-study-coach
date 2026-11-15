@@ -2,6 +2,7 @@ import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { createEngine } from '../server/engine.js';
 import { AppError, providers, callModel } from '../server/providers.js';
 import { createChatGPTAuth } from '../server/chatgpt-auth.js';
+import { createCloudSync } from '../server/cloud-sync.js';
 
 const storage = registerPlugin('StudyStorage');
 const device = registerPlugin('StudyDevice');
@@ -27,7 +28,16 @@ export function nativeAuthTransport(http = CapacitorHttp) {
   };
 }
 
-export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt,
+export function nativeSyncTransport(http = CapacitorHttp) {
+  return async(url,options={})=>{
+    const headers=Object.fromEntries(new Headers(options.headers).entries());
+    const data=options.body===undefined?undefined:headers['content-type']?.includes('application/json')?JSON.parse(options.body):options.body;
+    const r=await http.request({url,method:options.method || 'GET',headers,data,responseType:'text',connectTimeout:15000,readTimeout:20000,disableRedirects:true});
+    return new Response([204,205,304].includes(r.status) || options.method==='HEAD'?null:typeof r.data==='string'?r.data:JSON.stringify(r.data),{status:r.status,headers:r.headers});
+  };
+}
+
+export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt, syncOptions={},
   modelCall = (config, system, context) => config?.provider==='chatgpt' ? auth.complete(config,system,context) : callModel(config, system, context, nativeFetcher()) } = {}) {
   const auth=chatgpt || createChatGPTAuth({load:async()=>{const {value}=await store.loadAuth();return value?JSON.parse(value):null;},save:async value=>{await store.saveAuth({value:JSON.stringify(value)});},transport:nativeAuthTransport()});
   let initialState;
@@ -43,6 +53,10 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
       try { await store.save({ value: JSON.stringify(state) }); }
       catch { throw new AppError('手机存储失败，原有记录未覆盖，请检查可用空间后重试。'); }
     } });
+  const sync=createCloudSync({engine,transport:nativeSyncTransport(),
+    defaultConfig:import.meta.env?.VITE_SUPABASE_URL && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ? {url:import.meta.env.VITE_SUPABASE_URL,publishableKey:import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}:undefined,
+    load:async()=>{const {value}=await store.loadSync();return value?JSON.parse(value):null;},
+    save:async value=>{await store.saveSync({value:JSON.stringify(value)});},...syncOptions});
   return { async request(path, body) {
     const url = new URL(path, 'https://local/'); path = url.pathname.slice(1);
     if (path === 'state' && body === undefined) return engine.view({ compact, timeZone });
@@ -52,6 +66,8 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'review' && body === undefined) return engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'));
     if (path === 'data/export' && body === undefined) return engine.backup();
     if (path === 'data/preview') return engine.previewImport(body.backup);
+    if(path==='sync/status') return sync.status();
+    if(path.startsWith('sync/')) return {...await sync.action(path.slice(5),body || {}),state:engine.view({compact,timeZone})};
     if (path === 'chatgpt/status') return auth.status();
     if (path === 'chatgpt/models') return {models:await auth.models()};
     if (path === 'chatgpt/login') {
@@ -66,6 +82,8 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'session/start' && body?.placement) throw new AppError('请从日常练习开始。');
     if (path === 'settings' && !String(body?.baseURL || mobileProviders[body?.provider]?.baseURL || '').startsWith('https://')) throw new AppError('手机 API 地址须使用 HTTPS。');
     if (path === 'settings' && body?.provider==='chatgpt' && !(await auth.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
-    return engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
-  } };
+    const result=await engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
+    if(path.startsWith('session/') || path==='data/import') sync.notifyChange();
+    return result;
+  },close(){sync.close();} };
 }

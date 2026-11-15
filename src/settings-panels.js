@@ -1,7 +1,27 @@
 export function renderDataSettings({preview,esc,button}) {
   return `<section class="settings-data dash-panel" aria-label="学习数据"><h2>学习数据</h2><p>备份练习、追问和能力画像，可在手机与网页版之间迁移。文件包含你的学习内容，请妥善保存；不包含 API 密钥或 ChatGPT 登录凭据。</p><div class="form-actions">${button('导出备份','data-export','secondary-button')}${button('导入备份','data-pick','secondary-button')}</div><input type="file" id="backup-file" accept="application/json,.json" hidden>
     ${preview ? `<div class="backup-preview" role="status"><strong>导入预览</strong><p>文件含 ${preview.rounds} 轮练习、${preview.answers} 道作答。新增 ${preview.added} 轮，更新 ${preview.updated} 轮，跳过 ${preview.skipped} 轮。${preview.conflicts ? `有 ${preview.conflicts} 处进度冲突，将保留本机记录。` : ''}</p><p>合并导入会保留当前练习及模型配置。</p><div class="form-actions">${button('确认合并导入','data-confirm')}${button('取消导入','data-cancel','text-button')}</div></div>` : ''}
-    <details class="progress-note"><summary>联网同步</summary><p>当前使用本机存储，可通过备份文件迁移。联网同步尚未启用，后续会作为可选功能提供。</p></details></section>`;
+    </section>`;
+}
+
+export function renderSyncPanel({status:s,fields:f,preview,activity,esc,button}) {
+  const connected=s?.connected,enabled=s?.enabled;
+  const label=!s?'正在读取…':!s.configured?'仅保存在本机':!connected?'尚未登录':enabled?(s.phase==='error'?'等待重试':'自动同步已开启'):'同步已暂停';
+  return `<section id="sync-panel" class="settings-data dash-panel" aria-label="云端同步"><div class="sync-heading"><h2>云端同步</h2><span class="sync-badge ${enabled?'on':''}">${esc(label)}</span></div>
+    <p>在手机和电脑上用同一个邮箱，接着积累你的学习记录。随时可以暂停。</p>
+    ${activity?`<p role="status"><span class="spinner"></span>${esc(activity)}</p>`:''}
+    ${s?.lastError?`<p class="sync-warning" role="status">${esc(s.lastError)}</p>`:''}
+    ${!s?.managed?`<details class="sync-setup" ${s && !s.configured?'open':''}><summary>${s?.configured?'同步服务设置':'连接同步服务'}</summary><p class="field-help">首次使用需要一个 Supabase 项目。这里只填写项目 URL 和公开 Key。</p>
+      <form id="sync-config-form"><label>项目 URL<input id="sync-url" name="url" type="url" required placeholder="https://项目编号.supabase.co" value="${esc(f.url || s?.url)}" ${s?.bound?'readonly':''}></label>
+      <label>Publishable Key<input id="sync-key" name="publishableKey" autocomplete="off" required placeholder="sb_publishable_… 或 anon 公开 Key" value="${esc(f.publishableKey)}"></label>
+      <div class="form-actions"><button class="secondary-button" type="submit" ${!s?'disabled':''}>保存服务设置</button></div></form></details>`:''}
+    ${s?.configured && !connected?`<form id="sync-login-form"><label>同步邮箱<input id="sync-email" name="email" type="email" autocomplete="email" required value="${esc(f.email || s.email)}" ${s.bound?'readonly':''}></label>
+      <div class="form-actions">${button('发送验证码','sync-code','secondary-button')}</div><label>邮箱验证码<input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="输入邮件中的验证码" value="${esc(f.code)}"></label><button type="submit" class="primary-button">登录同步账号</button></form>`:''}
+    ${connected?`<p class="sync-account">${esc(s.email)}</p><p class="field-help">同步学习记录、追问、能力画像及学习偏好。API 密钥与 AI 账号授权保留在各自设备。正在做的练习留在原设备，完成后合并到其他设备。</p>
+      ${preview?`<div class="backup-preview" role="status"><strong>开启前确认</strong><p>本机有 ${preview.rounds} 轮练习、${preview.answers} 道作答，云端有 ${preview.cloudRecords} 条记录。开启后会自动上传和合并学习数据。</p><div class="form-actions">${button('确认开启同步','sync-confirm')}${button('暂不开启','sync-cancel','text-button')}</div></div>`:`<div class="form-actions">${enabled?button('立即同步','sync-now')+button('暂停同步','sync-disable','secondary-button'):button('开启自动同步','sync-preview')}${button('退出同步账号','sync-logout','text-button')}</div>`}
+      <p class="field-help">${s.lastSync?`上次同步：${esc(new Date(s.lastSync).toLocaleString('zh-CN'))}`:'尚未完成首次同步'} · 退出账号会保留本机和云端记录。</p>`:''}
+    ${s?.conflicts?.length?`<p class="sync-warning" role="status">${s.conflicts.length} 条记录在两台设备上有不同修改，已保留两边内容并暂停这些记录的合并。可以先导出本机备份，其余记录继续同步。</p>`:''}
+    </section>`;
 }
 
 export function renderChatGPTPanel({status,loading,models,authURL,cfg,esc,button}) {
