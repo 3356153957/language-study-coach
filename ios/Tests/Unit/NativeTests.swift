@@ -1,7 +1,13 @@
 import XCTest
+import CryptoKit
 @testable import App
 
 @MainActor final class NativeTests:XCTestCase {
+    func testJSONPresentationIsStableAndOversizedNumbersDoNotTrap()throws{
+        let first=try J.decode(Data("{\"z\":1,\"a\":2}".utf8)),second=try J.decode(Data("{\"a\":2,\"z\":1}".utf8))
+        XCTAssertEqual(first.json,second.json)
+        let huge=try J.decode(Data("1e100".utf8));XCTAssertEqual(huge.int,0);XCTAssertFalse(huge.text.isEmpty)
+    }
     func testNativeEngineGradesPreparesNextTaskAndKeepsBackupPortable()async throws{
         let runtime=StudyRuntime(fixture:true)
         XCTAssertNil(runtime.startupError)
@@ -29,9 +35,20 @@ import XCTest
     }
     func testVaultKeepsExistingAESGCMFormat()throws{
         let vault=StudyVault(),name="migration-test-"+UUID().uuidString
-        try vault.write(name,"{\"version\":1,\"sessions\":[]}")
+        let content="{\"version\":1,\"sessions\":[]}",key=try vault.key(create:true)
+        let legacy=try AES.GCM.seal(Data(content.utf8),using:key).combined!
+        try legacy.write(to:vault.directory.appendingPathComponent(name+".enc"),options:.atomic)
         defer{try? FileManager.default.removeItem(at:vault.directory.appendingPathComponent(name+".enc"))}
-        XCTAssertEqual(try vault.read(name),"{\"version\":1,\"sessions\":[]}")
+        XCTAssertEqual(try vault.read(name),content)
+        try vault.write(name,content)
+        let box=try AES.GCM.SealedBox(combined:Data(contentsOf:vault.directory.appendingPathComponent(name+".enc")))
+        XCTAssertEqual(try AES.GCM.open(box,using:key),Data(content.utf8))
+    }
+    func testFoundationURLAdapterPreservesEncodedPathsAndNativeRandomBytes()throws{
+        let runtime=StudyRuntime(fixture:true)
+        let result=runtime.context.evaluateScript("(()=>{const u=new URL('https://fixture.invalid/proxy%2Fv1/models');u.searchParams.set('pageToken','a+b');return u.href;})()")?.toString()
+        XCTAssertEqual(result,"https://fixture.invalid/proxy%2Fv1/models?pageToken=a%2Bb")
+        XCTAssertEqual(runtime.context.evaluateScript("crypto.getRandomValues(new Int32Array(4)).length")?.toInt32(),4)
     }
     func testSignedChatGPTIdentityRejectsTamperingNonceAndAudience()throws{
         let file=Bundle(for:Self.self).url(forResource:"identity-fixture",withExtension:"json")!

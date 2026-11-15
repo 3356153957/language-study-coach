@@ -1,5 +1,5 @@
 import { AppError } from './providers.js';
-import { goals, modes, validateTask, validateReport, validateFeedback } from './coach.js';
+import { goals, modes, validateTask, validateReport, validateFeedback, validateLearnerAnswer } from './coach.js';
 import { validateBackground } from './background.js';
 import { sharedProfile } from './profile.js';
 
@@ -15,7 +15,8 @@ function report(r) { return r ? {...validateReport(r),...(r.updatedAt?{updatedAt
 function session(s) {
   if (!s || !goals.includes(s.goal) || !modes.includes(s.mode) || !Array.isArray(s.history) || s.history.length>100) fail();
   const h=s.history.map(e=>{
-    const t=task(e.task,s.mode),answer=text(e.answer,4000);
+    const t=task(e.task,s.mode),answer=text(e.answer,t.questions?.length>1?100000:4000);
+    validateLearnerAnswer(t,answer);
     return {id:id(e.id),task:t,answer,feedback:validateFeedback(e.feedback,t,answer),at:date(e.at),askedAt:date(e.askedAt || s.startedAt),
       activeSeconds:integer(e.activeSeconds || 0,1800),replays:integer(e.replays || 0,100),hintUsed:flag(e.hintUsed || false),transcriptViewed:flag(e.transcriptViewed || false)};
   });
@@ -42,15 +43,21 @@ function session(s) {
   return result;
 }
 
-export function validateBackup(input) {
+export function validateBackup(input,{local=false}={}) {
   try {
-    if(!input || input.format!=='language-study-coach' || input.version!==1 || !input.data || !Array.isArray(input.data.sessions) || input.data.sessions.length>10000 || JSON.stringify(input).length>backupLimit) fail();
+    if(!input || input.format!=='language-study-coach' || input.version!==1 || !input.data || !Array.isArray(input.data.sessions) || (!local && (input.data.sessions.length>10000 || JSON.stringify(input).length>backupLimit))) fail();
     const sessions=input.data.sessions.map(session);
     if(new Set(sessions.map(s=>s.id)).size!==sessions.length || sessions.filter(s=>!s.finishedAt).length>1) fail();
     const backgrounds=(input.data.backgrounds || []).map(b=>({...validateBackground(b),importedAt:date(b.importedAt)}));
     if(backgrounds.length>100) fail();
     return {sessions,profile:report(input.data.profile),backgrounds};
   } catch { fail(); }
+}
+
+export function validateStoredLearningState(state){
+  if(!state || state.version!==1 || (state.profiles && (typeof state.profiles!=='object' || Array.isArray(state.profiles))))fail();
+  validateBackup({format:'language-study-coach',version:1,data:{sessions:state.sessions,profile:sharedProfile(state),backgrounds:state.backgrounds || []}},{local:true});
+  return state;
 }
 
 export function exportBackup(state) {

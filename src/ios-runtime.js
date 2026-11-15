@@ -4,12 +4,22 @@ import { createEngine } from '../server/engine.js';
 import { providers, callModel, AppError } from '../server/providers.js';
 import { createCloudSync } from '../server/cloud-sync.js';
 import { createChatGPTAuth } from '../server/chatgpt-auth.js';
+import { validateStoredLearningState } from '../server/backup.js';
 
-const load = name => JSON.parse(__nativeLoad(name) || 'null');
+const load = name => {
+  try {return JSON.parse(__nativeLoad(name) || 'null');}
+  catch {throw new AppError('手机记录无法读取，原文件已保留。请勿卸载应用。');}
+};
+const initialState=load('learning-state');
+if(initialState!==null){
+  try{
+    validateStoredLearningState(initialState); // Check the archive before allowing replacement writes.
+  }catch{throw new AppError('手机学习记录无法读取，原文件已保留。请勿卸载应用。');}
+}
 const save = (name,value) => { const error=__nativeSave(name,JSON.stringify(value));if(error)throw new AppError(error); };
 const invoke=(action,input={})=>globalThis.nativeInvoke(action,input);
 const auth=createChatGPTAuth({load:()=>load('chatgpt-auth'),save:value=>save('chatgpt-auth',value),identityVerifier:input=>invoke('verifyIdentity',input)});
-const engine=createEngine({initialState:load('learning-state') || undefined,save:value=>save('learning-state',value),availableProviders:Object.fromEntries(Object.entries(providers).filter(([id])=>id!=='codex')),allowImport:false,
+const engine=createEngine({initialState:initialState ?? undefined,save:value=>save('learning-state',value),availableProviders:Object.fromEntries(Object.entries(providers).filter(([id])=>id!=='codex')),allowImport:false,
   modelCall:(config,system,context)=>config?.provider==='chatgpt'?auth.complete(config,system,context):callModel(config,system,context)});
 const config=JSON.parse(__nativeConfig());
 const otpClient=(url,key)=>({auth:{
@@ -18,11 +28,13 @@ const otpClient=(url,key)=>({auth:{
   refreshSession:async({refresh_token})=>otp(url,key,'token?grant_type=refresh_token',{refresh_token}),
 }});
 async function otp(url,key,path,body) {
-  const response=await fetch(`${url}/auth/v1/${path}`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
-  const data=await response.json();
-  if(!response.ok)return {error:{status:response.status}};
-  if(data.access_token) {data.expires_at ||= Math.floor(Date.now()/1000)+data.expires_in;return {data:{session:data}};}
-  return {data};
+  try{
+    const response=await fetch(`${url}/auth/v1/${path}`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
+    if(!response.ok)return {error:{status:response.status}};
+    let data;try{data=await response.json();}catch{return {error:{status:502}};}
+    if(data?.access_token) {data.expires_at ||= Math.floor(Date.now()/1000)+data.expires_in;return {data:{session:data}};}
+    return {data};
+  }catch{return {error:{status:0}};}
 }
 const sync=createCloudSync({engine,defaultConfig:config.url?config:undefined,load:()=>load('cloud-sync'),save:value=>save('cloud-sync',value),authFactory:otpClient});
 const options={compact:true,timeZone:__nativeTimeZone()};

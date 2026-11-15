@@ -90,14 +90,14 @@ npm run preview  # 同一端口预览构建结果，也会启动本地 API
 
 ## iOS 独立版
 
-已准备 Capacitor iOS 工程，手机直接使用各厂商 API，本地加密保存学习记录。运行 `npm run ios:sync` 更新工程；无 Mac 可用仓库中的 GitHub Actions 编译。已生成 `build/ios/LanguageStudyCoach-unsigned.ipa`；签名和真机安装尚未验证，见 [iOS 说明](docs/ios.md)。
+2.0 手机界面使用 SwiftUI，学习逻辑在无页面的 JavaScriptCore 引擎中运行，直接连接所选 AI 服务。`npm run ios:sync` 生成引擎资源，Mac 上用 `npm run ios:open` 生成原生工程。旧 1.x IPA 属于 Capacitor 版本；2.0 的 Xcode 编译与 IPA 仍待 macOS 构建恢复，见 [SwiftUI 说明](docs/ios-swiftui.md)。
 
 ## 验证状态
 
 - 上游模型列表、自适应题组、同步防滥用与更新检查（2026-11-15）：78 项本地测试通过，覆盖五个 API 选项、分页、密钥隔离、原生 GET 请求、错误处理、模型选择，B1 阅读 / 听力同材料多问题、文字表达多输入格、授权回调恢复、邮箱验证码限频 / CAPTCHA token、GitHub Release 检查和答案隐藏。隔离浏览器已验证自动获取、搜索、选择保存、手动输入、失败提示和切换服务商。厂商协议使用模拟响应验证，未用真实 API Key 逐家请求。
 - iOS 1.4（build 5）：私有仓库云构建成功，78 项测试、Swift 编译、Xcode archive 和 IPA 下载核验通过。Release 与校验记录见 [iOS 说明](docs/ios.md)。IPA 未签名；Turnstile 需要维护者配置站点 Key 与 Supabase Auth Secret，私有 GitHub Release 不能被 App 匿名读取。
 - iOS 1.4.1（build 6）补充 OpenAI 地区限制的明确错误提示；不绕过官方地区政策，受限地区可改用 API Key 服务商。
-- iOS 2.0 SwiftUI 迁移（2026-11-15）：83 项本地 Node 测试、网页构建和无页面引擎打包通过。Swift 语法解析通过，Xcode 编译、原生 XCTest/UI 测试、键盘截图和 IPA 仍待 macOS 构建恢复，见 [迁移状态](docs/ios-swiftui.md)。未发布 1.4.2 修补包。
+- iOS 2.0 SwiftUI 迁移（2026-11-15）：91 项本地 Node 测试、网页构建和无页面引擎打包通过。新增错误验证码/断网区分、保存失败重试、重启恢复、取消和超时资源清理、ChatGPT 授权桥接、多格长答案备份与打包密钥检查。8 个 Swift 文件语法解析通过，Xcode 编译、原生 XCTest/UI 测试、键盘截图和 IPA 仍待 macOS 构建恢复，见 [迁移状态](docs/ios-swiftui.md)。未发布 1.4.2 修补包。
 
 - 可选云同步（2026-11-15）：64 项本地检查通过，含真实 PostgreSQL 的 RLS / 修订检查、双设备与离线重试、暂停中断、官方 SDK 登录刷新协议和跨站拒绝。统一 Supabase 项目及 SMTP 已部署，实际 SQL 权限检查及匿名 HTTP 拒绝通过；独立测试邮箱已完成真实收件、验证码登录、联网上传合并与暂停，正式网页邮箱入口也已核验。iOS 1.3（build 4）已通过 63 项云构建测试并生成内置统一公开配置的未签名 IPA，签名安装和真机同步尚未验证，详见 [配置说明](docs/cloud-sync.md)。
 

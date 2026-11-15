@@ -48,3 +48,11 @@ test('native import/export survives restart without replacing the phone API key'
  assert.equal((await restored.request('data/export')).data.sessions.length,1);
  assert.equal(JSON.parse(value).config.apiKey,'phone-secret');
 });
+
+test('multi-question writing backups allow the existing per-answer limit and reject oversized individual answers',()=>{
+ const written=round('written');written.mode='写作';
+ const e=written.history[0];e.task={...e.task,kind:'text',skill:'表达',options:[],answer:'',questions:[{prompt:'Describe the meal.',options:[],answer:'A meal.'},{prompt:'Describe the room.',options:[],answer:'A room.'}]};
+ e.feedback={correct:true,explanation:'符合要求',suggestion:'',weakness:''};e.answer=JSON.stringify(['a'.repeat(3000),'b'.repeat(3000)]);
+ const backup=exportBackup(state([written]));assert.equal(validateBackup(backup).sessions[0].history[0].answer,e.answer);
+ backup.data.sessions[0].history[0].answer=JSON.stringify(['a'.repeat(4001),'b']);assert.throws(()=>validateBackup(backup),/格式无效/);
+});

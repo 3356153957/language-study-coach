@@ -17,7 +17,7 @@ final class StudyHTTP:NSObject,URLSessionTaskDelegate {
         do{(data,response)=try await session.data(for:request)}catch{throw StudyError((error as? URLError)?.code == .timedOut ? "请求超时，请稍后重试。":"无法连接服务，请检查网络后重试。")}
         guard let http=response as? HTTPURLResponse,data.count<=5*1024*1024 else{throw StudyError("服务返回的内容过大或格式无效。")}
         if (300..<400).contains(http.statusCode){throw StudyError("接口发生跳转，已停止请求，请检查接口基础地址。")}
-        let headers=Dictionary(uniqueKeysWithValues:http.allHeaderFields.map{(String(describing:$0.key).lowercased(),J.s(String(describing:$0.value)))})
+        let headers=http.allHeaderFields.reduce(into:[String:J]()){result,entry in result[String(describing:entry.key).lowercased()] = .s(String(describing:entry.value))}
         return .object(["status":.n(http.statusCode),"headers":.object(headers),"body":.s(String(data:data,encoding:.utf8) ?? "")])
     }
 }
@@ -40,6 +40,7 @@ enum SignedIdentity {
             let header=try J.decode(data(parts[0])),payload=try J.decode(data(parts[1])),now=Double(input["now"].int)/1000
             let audience=payload["aud"].text==input["clientId"].text || payload["aud"].list.contains(.s(input["clientId"].text))
             guard header["alg"].text=="RS256",!header["crit"].exists,payload["iss"].text=="https://auth.openai.com",audience,payload["nonce"].text==input["nonce"].text,!payload["sub"].text.isEmpty,payload["exp"].int>Int(now),payload["iat"].int>0,payload["iat"].int<=Int(now)+60 else{throw StudyError("")}
+            if payload["nbf"].exists{guard case .number(let validAfter)=payload["nbf"],validAfter<=now else{throw StudyError("")}}
             let matches=keys["keys"].list.filter{$0["kty"].text=="RSA" && (!$0["use"].exists || $0["use"].text=="sig") && (!$0["alg"].exists || $0["alg"].text=="RS256") && (header["kid"].text.isEmpty || $0["kid"].text==header["kid"].text)}
             guard matches.count==1 else{throw StudyError("")};let jwk=matches[0]
             let keyData=der(0x30,try integer(data(jwk["n"].text))+integer(data(jwk["e"].text)))
@@ -57,7 +58,9 @@ enum SignedIdentity {
     func prepare()async throws->String{
         cancel()
         let params=NWParameters.tcp;params.requiredLocalEndpoint = .hostPort(host:"127.0.0.1",port:.any)
-        let server=try NWListener(using:params);listener=server
+        let server:NWListener
+        do{server=try NWListener(using:params)}catch{throw StudyError("无法准备本机授权连接，请重试。")}
+        listener=server
         return try await withCheckedThrowingContinuation{c in
             var answered=false
             server.stateUpdateHandler={ [weak self] state in

@@ -191,6 +191,10 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
       const key=await emailKey(email),current=now(),guard=state.otp.emails[key] || {};
       if(guard.lockedUntil && current<guard.lockedUntil) throw new AppError('验证码尝试次数过多，请稍后再试。',429);
       const {data,error}=await auth().verifyOtp({email,token:code,type:'email'});
+      // Transport/server failures do not prove that the learner entered a bad
+      // code. Preserve the attempt budget so reconnecting remains possible.
+      if(error && ![400,401,403,422].includes(error.status))
+        throw new AppError(error.status===429 ? '验证请求过于频繁，请稍后重试。' : '网络暂不可用，验证码尚未验证，请恢复连接后重试。',error.status===429 ? 429 : 502);
       if(error || !data?.session) {
         const failed=(guard.failedCount||0)+1;
         state.otp.emails[key]={...guard,failedCount:failed,lockedUntil:failed>=otpFailureLimit ? current+otpLock : 0};

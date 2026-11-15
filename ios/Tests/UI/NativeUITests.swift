@@ -26,5 +26,21 @@ final class NativeUITests:XCTestCase {
         app.buttons["verify-code"].tap()
         let error=app.staticTexts["otp-error"]
         XCTAssertTrue(error.waitForExistence(timeout:10));XCTAssertTrue(error.label.contains("验证码无效"));capture(app,"04-native-otp-error")
+        code.tap();code.typeText(String(repeating:XCUIKeyboardKey.delete.rawValue,count:6)+"123456")
+        if app.buttons["完成"].exists{app.buttons["完成"].tap()}
+        app.buttons["verify-code"].tap()
+        XCTAssertTrue(app.buttons["开启自动同步"].waitForExistence(timeout:10));XCTAssertFalse(error.exists);capture(app,"05-native-otp-corrected")
+    }
+    func testLandscapeKeyboardKeepsAnswerVisibleWithoutWebContent(){
+        let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
+        app.buttons["start-写作"].tap()
+        let first=app.textViews["answer-0"];XCTAssertTrue(first.waitForExistence(timeout:15))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer{XCUIDevice.shared.orientation = .portrait}
+        first.tap();first.typeText("I had prepared the plates.")
+        let keyboard=app.keyboards.firstMatch;XCTAssertTrue(keyboard.waitForExistence(timeout:5))
+        let visible=NSPredicate{_,_ in first.isHittable && first.frame.minY>=app.frame.minY && first.frame.maxY<=keyboard.frame.minY}
+        expectation(for:visible,evaluatedWith:first);waitForExpectations(timeout:5)
+        XCTAssertEqual(app.webViews.count,0);capture(app,"06-native-landscape-keyboard")
     }
 }

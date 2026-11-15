@@ -3,8 +3,11 @@ import AVFoundation
 
 @MainActor final class StudyStore:ObservableObject {
     @Published var state:J = .null
-    @Published var busy="",error="",notice=""
-    @Published var practice=false,goal=UserDefaults.standard.string(forKey:"native-goal") ?? "四级"
+    @Published var busy=""
+    @Published var error=""
+    @Published var notice=""
+    @Published var practice=false
+    @Published var goal=UserDefaults.standard.string(forKey:"native-goal") ?? "四级"
     @Published var tab=0
     let runtime:StudyRuntime
     let speech=AVSpeechSynthesizer()
