@@ -6,5 +6,6 @@ dist/
 .local/
 artifacts/
 build/
+supabase/.temp/
 *.p12
 *.mobileprovision
