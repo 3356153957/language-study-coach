@@ -41,8 +41,9 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
       if (req.method==='GET' && route==='/auth/callback') {
         let message='ChatGPT 授权成功，请返回 Language Study Coach。',status=200;
         try { await chatgpt.finish(`http://${host}${req.url}`); chatgptLoginError=''; } catch(e) {status=400;message=e instanceof AppError?e.message:'授权未能保存，请返回应用重试。';chatgptLoginError=message;}
-        res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'",'Referrer-Policy':'no-referrer'});
-        return res.end(`<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width"><title>ChatGPT 授权</title><h1>${message}</h1></html>`);
+        const returnPath = status === 200 ? '/?chatgpt=callback' : '/?chatgpt=error';
+        res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'unsafe-inline'",'Referrer-Policy':'no-referrer'});
+        return res.end(`<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="1;url=${returnPath}"><title>ChatGPT 授权</title><h1>${message}</h1><p>正在返回 Language Study Coach…</p><script>setTimeout(()=>location.replace('${returnPath}'),250);</script></html>`);
       }
       if (req.method === 'GET' && route === '/api/state') return send(200, engine.view(viewOptions));
       if (req.method === 'GET' && route === '/api/session/detail') return send(200, engine.detail(url.searchParams.get('id')));

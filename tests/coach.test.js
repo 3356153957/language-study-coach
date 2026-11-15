@@ -347,7 +347,7 @@ test('writing grade-and-next receives the learner wording without its sample ans
 });
 
 test('B1 reading and listening tasks can contain multiple questions while hiding keys until answered', async t => {
-  const grouped = { kind: 'choice', skill: '阅读', level: 'B1', reason: '练习文章主旨与细节', prompt: 'Read the passage and answer the questions.', passage: 'Mia takes the early train because it is quiet.', audio: '', options: [], answer: '', hint: '先找原因。', questions: [
+  const grouped = { kind: 'choice', skill: '阅读', level: 'B1', reason: '练习文章主旨与细节', prompt: 'Read the passage and answer the questions.', passage: 'Mia takes the early train because it is quiet.', translation: '米娅乘坐早班火车，因为那时很安静。', audio: '', options: [], answer: '', hint: '先找原因。', questions: [
     { prompt: 'Why does Mia take the early train?', options: ['It is quiet.', 'It is free.'], answer: 'It is quiet.' },
     { prompt: 'What does Mia take?', options: ['A train.', 'A taxi.'], answer: 'A train.' },
   ] };
@@ -360,7 +360,23 @@ test('B1 reading and listening tasks can contain multiple questions while hiding
   let s = (await h.request('session/start', { goal: '四级', mode: '阅读' })).body.sessions[0];
   assert.equal(s.current.questions.length, 2);
   assert.equal(s.current.questions[0].answer, undefined);
+  assert.equal(s.current.translation, undefined);
   const answer = JSON.stringify(['It is quiet.', 'A train.']);
+  const result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.sessions[0].history[0].answer, answer);
+  assert.equal(result.body.sessions[0].current.translation, grouped.translation);
+});
+
+test('open multi-question writing uses one answer box per prompt and accepts JSON answers', async t => {
+  const grouped = { kind: 'text', skill: '表达', level: 'B1', reason: '练习分步骤表达', prompt: 'Answer each question in English.', passage: '', translation: '', audio: '', options: [], answer: '', hint: '先写完整句子。', questions: [
+    { prompt: 'What did you do yesterday?', options: [], answer: 'I went shopping.' },
+    { prompt: 'Why did you do it?', options: [], answer: 'I needed vegetables.' },
+  ] };
+  const h = await harness(t, async (cfg, prompt) => prompt === prompts.next ? grouped : { feedback: { correct: true, explanation: '两部分都表达清楚了。', suggestion: '', weakness: '' }, nextTask: { ...task(9), prompt: 'A different next task.' } });
+  await h.request('settings', config);
+  const s = (await h.request('session/start', { goal: '日常英语', mode: '写作' })).body.sessions[0];
+  const answer = JSON.stringify(['I went shopping.', 'I needed vegetables.']);
   const result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer });
   assert.equal(result.status, 200);
   assert.equal(result.body.sessions[0].history[0].answer, answer);

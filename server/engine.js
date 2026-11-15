@@ -41,6 +41,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   }
   function publicTask(task, answered) {
     const { answer, ...rest } = task;
+    if (!answered) delete rest.translation;
     if (Array.isArray(rest.questions)) rest.questions = rest.questions.map(question => {
       if (answered) return question;
       const { answer: hidden, ...publicQuestion } = question;

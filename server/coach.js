@@ -14,8 +14,8 @@ profile 是同一位学习者跨全部目标共用的英语能力画像。切换
 
 export const prompts = {
   next: base + `\n生成一道新的任务。综合模式由你选择当前最值得训练的技能，允许重点练弱项，但适当交叉题型；初测尽量覆盖词汇、语法、阅读、听力、表达。不要重复历史中的同一道题。对话模式连续接续用户话题，kind用conversation；听力模式kind用listening；题卡模式kind用choice或text且不考听力。
-严格使用结构 {"kind":"choice|text|listening|conversation","skill":"阅读|听力|词汇|语法|表达","level":"A1|A2|B1|B2|C1|C2","reason":"为什么出这题，简短且不透露答案","prompt":"题目或这组题的共同说明","passage":"阅读完整材料，否则空字符串","audio":"听力完整英文原文，否则空字符串","options":["单问题的选项文字"],"answer":"单问题的正确选项文字或开放题参考答案","questions":[{"prompt":"关联问题","options":["选项文字"],"answer":"该问题正确选项文字"}],"hint":"简短学习提示，不直接透露答案"}。
-选择题和听力题须有2至4个互不重复的选项且有唯一正确答案。阅读必须提供完整材料。听力的prompt不包含音频原文，不把答案提前告诉用户。开放题options为空数组。听力skill必须为听力，conversation为表达。A1/A2 保持一个问题；当阅读或听力达到 B1 及以上、材料适合考查多个细节时，优先在同一篇文章或同一段听力下生成 2 至 4 个关联问题，使用 questions 字段；questions 中每个问题都要有自己的 options 和 answer，顶层 options/answer 可留空。`,
+严格使用结构 {"kind":"choice|text|listening|conversation","skill":"阅读|听力|词汇|语法|表达","level":"A1|A2|B1|B2|C1|C2","reason":"为什么出这题，简短且不透露答案","prompt":"题目或这组题的共同说明","passage":"阅读完整材料，否则空字符串","translation":"阅读材料的自然中文翻译；其他题型为空字符串，作答前不展示","audio":"听力完整英文原文，否则空字符串","options":["单问题的选项文字"],"answer":"单问题的正确选项文字或开放题参考答案","questions":[{"prompt":"关联问题","options":["选项文字"],"answer":"该问题正确选项文字"}],"hint":"简短学习提示，不直接透露答案"}。
+选择题和听力题须有2至4个互不重复的选项且有唯一正确答案。阅读必须提供完整材料。听力的prompt不包含音频原文，不把答案提前告诉用户。开放题options为空数组。听力skill必须为听力，conversation为表达。A1/A2 保持一个问题；当阅读或听力达到 B1 及以上、材料适合考查多个细节时，优先在同一篇文章或同一段听力下生成 2 至 4 个关联问题；写作或对话需要分步骤表达时也可生成 2 至 4 个开放问题，使用 questions 字段。questions 中每个问题都要有自己的 options 和 answer，开放问题的 options 为空数组，顶层 options/answer 可留空。`,
   grade: base + `\n批改当前回答并解释具体依据。选择题按给定参考答案判断；开放题根据题目要求独立判断，接纳合理回答，不要求逐字匹配参考答案。
 suggestion 必须是对用户 answer 原句的润色：保留用户的意思、观点、具体细节，尽量保留原句结构与叙述顺序，只做必要的拼写、语法、标点和自然度调整。不要另写范文，不要套用参考答案或只替换参考答案中的个别近义词。缺少的答题要求在 explanation 中说明；若必须补充，限于题目已经明确给出的信息，并说明改动。explanation 应指出原句中具体改了哪里及原因。若 discussion 中用户已澄清原意，以用户说明的意思为准；教练在讨论中提供的答案不能作为用户独立掌握的证据。
 例如用户先说去了商店，再解释做饭时发现缺少食材，润色应尽量保留“去商店 → 解释原因”的顺序，不改写成“正在做饭 → 发现问题 → 去商店”的范文结构。选择题 suggestion 为空字符串；原句已经自然准确时也可为空，不强行改写。
@@ -36,6 +36,7 @@ export function gradingContext(context, task, answer, telemetry) {
   // Open-ended writing is judged against the instructions, without a sample answer
   // that could anchor the model's rewrite. Choices still need the answer key.
   const hasChoiceKey = taskQuestions(task).some(q => q.options.length);
+  if (!hasChoiceKey && Array.isArray(question.questions)) question.questions = question.questions.map(({ answer: hidden, ...q }) => q);
   return { ...context, task: hasChoiceKey ? task : question, answer, telemetry };
 }
 
@@ -54,7 +55,7 @@ export function validateTask(data, session) {
   if (session.mode === '写作' && (data.kind !== 'text' || data.skill !== '表达') || session.mode === '阅读' && (!['choice', 'text'].includes(data.kind) || data.skill !== '阅读')) throw new AppError('模型未遵循所选练习方式，请重试。', 502);
   const task = { id: randomUUID(), kind: data.kind, skill: data.skill, level: data.level,
     reason: str(data.reason, 600), prompt: str(data.prompt, 2500), passage: str(data.passage, 6000, true),
-    audio: str(data.audio, 4000, true), answer: str(data.answer, 3000, Array.isArray(data.questions) && data.questions.length > 1), hint: str(data.hint, 1000), options: data.options };
+    translation: str(typeof data.translation === 'string' ? data.translation : '', 6000, true), audio: str(data.audio, 4000, true), answer: str(data.answer, 3000, Array.isArray(data.questions) && data.questions.length > 1), hint: str(data.hint, 1000), options: data.options };
   if (!Array.isArray(task.options)) throw new AppError('模型没有返回有效选项，请重试。', 502);
   task.options = task.options.map(x => str(x, 700));
   const rawQuestions = Array.isArray(data.questions) && data.questions.length ? data.questions : [{ prompt: task.prompt, options: task.options, answer: task.answer }];
@@ -68,7 +69,6 @@ export function validateTask(data, session) {
     return question;
   });
   if (task.questions.length === 1 && !Array.isArray(data.questions)) task.questions = null;
-  if (task.questions?.length > 1 && !['choice', 'listening'].includes(task.kind)) throw new AppError('开放题暂不支持多问题结构，请重试。', 502);
   if (task.questions?.length > 1) {
     task.options = [];
     task.answer = '';
@@ -93,13 +93,13 @@ export function validateLearnerAnswer(task, answer) {
   }
   let values;
   try { values = JSON.parse(answer); } catch { throw new AppError('请完成这组题目后再提交。'); }
-  if (!Array.isArray(values) || values.length !== questions.length || values.some((value, i) => typeof value !== 'string' || !questions[i].options.includes(value))) throw new AppError('请完成这组题目后再提交。');
+  if (!Array.isArray(values) || values.length !== questions.length || values.some((value, i) => typeof value !== 'string' || !value.trim() || value.length > 4000 || (questions[i].options.length && !questions[i].options.includes(value)))) throw new AppError('请完成这组题目后再提交。');
 }
 
 export function validateFeedback(data, task, answer) {
   if (!data || typeof data.correct !== 'boolean') throw new AppError('模型批改结果不完整，请重试。', 502);
   const questions = taskQuestions(task);
-  const expected = questions.length > 1 ? (() => { try { const values = JSON.parse(answer); return Array.isArray(values) && values.length === questions.length && values.every((value, i) => value === questions[i].answer); } catch { return false; } })() : (questions[0].options.length ? answer === questions[0].answer : null);
+  const expected = questions.length > 1 && questions.every(question => question.options.length) ? (() => { try { const values = JSON.parse(answer); return Array.isArray(values) && values.length === questions.length && values.every((value, i) => value === questions[i].answer); } catch { return false; } })() : (questions[0].options.length ? answer === questions[0].answer : null);
   if (expected !== null && data.correct !== expected) throw new AppError('模型批改与题目答案矛盾，请重试。', 502);
   const suggestion = str(data.suggestion, 3000, true);
   return { correct: data.correct, explanation: str(data.explanation), suggestion: task.options.length || suggestion === answer ? '' : suggestion, weakness: data.correct ? '' : str(data.weakness, 1000) };

@@ -46,7 +46,7 @@ function answerComplete(task, value) {
   if (items.length === 1) return !!String(value || '').trim();
   try {
     const values = JSON.parse(value || '[]');
-    return Array.isArray(values) && values.length === items.length && values.every((answer, i) => items[i].options.includes(answer));
+    return Array.isArray(values) && values.length === items.length && values.every((answer, i) => typeof answer === 'string' && !!answer.trim() && (!items[i].options.length || items[i].options.includes(answer)));
   } catch { return false; }
 }
 const listeningPlayer = createListeningPlayer({
@@ -307,7 +307,7 @@ function roundReview(session) {
     const items = taskQuestions(task), answers = items.length === 1 ? [entry.answer] : (() => { try { const parsed = JSON.parse(entry.answer); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })();
     const questionReview = items.map((item, itemIndex) => `<div class="round-subquestion"><strong>${items.length > 1 ? `${itemIndex + 1}. ` : ''}${esc(item.prompt)}</strong>${item.options.length ? `<ol class="round-options" type="A">${item.options.map(option => `<li lang="en" class="${answers[itemIndex] === option ? 'selected' : ''}">${esc(option)}</li>`).join('')}</ol>` : ''}<p>你的回答：<span lang="en">${esc(answers[itemIndex] || '')}</span></p><p>参考答案：<span lang="en">${esc(item.answer)}</span></p></div>`).join('');
     return `<details class="round-question"><summary><span class="round-number">${index + 1}</span><span class="round-question-title"><strong>${esc(task.skill)} · ${esc(task.level)}</strong><span>${esc(task.prompt)}</span></span><span class="round-result ${feedback.correct ? 'right' : 'wrong'}">${feedback.correct ? '答对' : '再巩固'}</span></summary><div class="round-answer">
-      ${task.passage ? `<div class="reading-passage" lang="en">${esc(task.passage)}</div>` : ''}${task.audio ? `<div class="round-material"><strong>听力原文</strong><p lang="en">${esc(task.audio)}</p></div>` : ''}
+      ${task.passage ? `<div class="reading-passage" lang="en">${esc(task.passage)}</div>${task.translation ? `<div class="reading-translation" lang="zh-CN"><span>中文译文</span><p>${esc(task.translation)}</p></div>` : ''}` : ''}${task.audio ? `<div class="round-material"><strong>听力原文</strong><p lang="en">${esc(task.audio)}</p></div>` : ''}
       ${questionReview}
       <div class="round-explanation"><strong>理解这道题</strong><p>${esc(feedback.explanation)}</p>${feedback.suggestion ? `<p><strong>表达建议</strong><br>${esc(feedback.suggestion)}</p>` : ''}</div>
       ${(session.discussions?.[task.id] || []).length ? `<details class="saved-discussion"><summary>查看这道题的追问记录</summary>${session.discussions[task.id].map(turn => `<div><strong>你</strong><p class="chat-text">${esc(turn.message)}</p><strong>英语教练</strong><p class="chat-text">${esc(turn.reply)}</p></div>`).join('')}</details>` : ''}
@@ -492,6 +492,12 @@ app.addEventListener('click', async event => {
 });
 app.addEventListener('input', event => {
   if(event.target.closest('#sync-panel') && event.target.name) syncFields[event.target.name]=event.target.value;
+  if (event.target.classList.contains('task-text-answer')) {
+    let values; try { values = JSON.parse(draft.answer || '[]'); } catch { values = []; }
+    const items = taskQuestions(current()?.current); if (!Array.isArray(values) || values.length !== items.length) values = Array(items.length).fill('');
+    values[Number(event.target.dataset.questionIndex)] = event.target.value; draft.answer = JSON.stringify(values); persistDraft();
+    const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); return;
+  }
   if (event.target.id === 'answer-text') { draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); }
   if (event.target.id === 'coach-message') { draft.coachMessage = event.target.value; draft.coachRequestId = null; persistDraft(); const send = app.querySelector('[data-action="send-coach"]'); if (send) send.disabled = !draft.coachMessage.trim(); }
   if (event.target.id === 'model-search') {
@@ -548,6 +554,12 @@ app.addEventListener('keydown', event => {
   const card = event.target.closest?.('[data-action][role="link"]');
   if (card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); card.click(); return; }
   if (!event.target.closest('#chat-composer') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  if (event.target.classList.contains('task-text-answer')) {
+    event.preventDefault();
+    const fields = [...app.querySelectorAll('.task-text-answer')], index = fields.indexOf(event.target), next = fields[index + 1];
+    if (next) next.focus(); else app.querySelector('[data-action="submit"]')?.click();
+    return;
+  }
   event.preventDefault(); app.querySelector(`[data-action="${event.target.id === 'coach-message' ? 'send-coach' : 'submit'}"]`)?.click();
 });
 app.addEventListener('cancel',event=>{if(event.target.matches('.plan-welcome')){event.preventDefault();app.querySelector('[data-action="plan-notice-close"]')?.click();}},true);
@@ -565,4 +577,14 @@ window.addEventListener('pagehide', () => { stopMedia(); persistDraft(); });
 function updateViewport() { document.documentElement.style.setProperty('--app-height',`${window.visualViewport?.height || window.innerHeight}px`); }
 window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);updateViewport();
 if(native) deviceBridge.safeArea().then(i=>{for(const edge of ['top','bottom','left','right'])document.documentElement.style.setProperty(`--safe-${edge}`,`${i[edge]}px`);}).catch(()=>{});
-run('读取学习记录…', async () => { await api('state'); if (current()) { goal = current().goal; screen = 'session'; } }).then(automaticSync);
+const chatGPTReturn = new URLSearchParams(location.search).get('chatgpt');
+if (chatGPTReturn) history.replaceState(null, '', location.pathname);
+run('读取学习记录…', async () => {
+  await api('state');
+  if (chatGPTReturn) {
+    screen = 'settings';
+    settingsDraft = { ...(data?.config || { provider: 'chatgpt', baseURL: '', model: '' }), provider: 'chatgpt', apiKey: '' };
+    refreshAuth();
+    refreshSync();
+  } else if (current()) { goal = current().goal; screen = 'session'; }
+}).then(automaticSync);
