@@ -2,7 +2,9 @@
 import './style.css';
 import './dashboard.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import { renderDataSettings, renderChatGPTPanel } from './settings-panels.js';
+const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
 const defaultProvider = native ? 'openai' : 'codex';
 let nativeClient;
@@ -26,6 +28,8 @@ let detailSession = null, reviewData = null, reviewOffset = 0;
 let activityData = null, practiceMode = '听力';
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
+let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
+let importBackup = null, importPreview = null;
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
 try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } catch { /* Replace invalid tab draft. */ }
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
@@ -81,6 +85,32 @@ async function refreshCodex() {
     if (screen === 'settings') render();
   }
 }
+async function refreshAuth() {
+  if(authLoading) return;
+  authLoading=true; render();
+  try {
+    authStatus=await request('chatgpt/status');
+    if(authStatus.loggedIn) {authURL='';authModels=(await request('chatgpt/models')).models;}
+    else if(!authStatus.login) authURL='';
+  } catch(e) {error=e.message;}
+  finally {
+    authLoading=false;clearTimeout(authPoll);
+    if(screen==='settings' && settingsDraft?.provider==='chatgpt' && authStatus?.login?.state==='pending') authPoll=setTimeout(refreshAuth,3000);
+    if(screen==='settings') render();
+  }
+}
+async function previewBackup(value) {
+  if(value.length>20*1024*1024) throw new Error('备份超过 20 MB，请选择较小的备份文件。');
+  let backup;try{backup=JSON.parse(value);}catch{throw new Error('文件不是有效的 JSON 备份。');}
+  importPreview=await request('data/preview',{backup});importBackup=backup;
+}
+async function exportData() {
+  const backup=await request('data/export'),value=JSON.stringify(backup,null,2);
+  if(native) {const result=await deviceBridge.exportFile({value});notice=result.completed?'备份已交给系统保存或分享。':'已取消导出。';return;}
+  const url=URL.createObjectURL(new Blob([value],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download=`language-study-coach-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  notice='备份已开始下载。';
+}
 async function run(label, fn) {
   if (busy) return;
   busy = label; error = ''; notice = ''; stopMedia(); render();
@@ -89,11 +119,11 @@ async function run(label, fn) {
 }
 function navigate(target) {
   stopMedia(); error = ''; notice = ''; screen = target;
-  clearTimeout(codexPolling);
+  clearTimeout(codexPolling); clearTimeout(authPoll);
   if (target !== 'summary') detailSession = null;
   if (target !== 'review') { reviewData = null; reviewOffset = 0; }
   if (!['activity','week'].includes(target)) activityData = null;
-  if (target !== 'settings') { settingsDraft = null; codexStatus = null; }
+  if (target !== 'settings') { settingsDraft = null; codexStatus = null; authURL = ''; importBackup = null; importPreview = null; }
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (target === 'activity' || target === 'week') {
     activityData = null;
@@ -107,10 +137,11 @@ function navigate(target) {
   if (target === 'profile') {
     return run('正在读取能力详情…', async () => { const profile = await request('profile'); data = { ...data, ...profile }; });
   }
-  clearTimeout(codexPolling);
+  clearTimeout(codexPolling); clearTimeout(authPoll);
   if (target === 'settings') {
     settingsDraft = { ...(data?.config || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '' }), apiKey: '' };
     if (settingsDraft.provider === 'codex') refreshCodex();
+    if (settingsDraft.provider === 'chatgpt') refreshAuth();
   }
   render(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -159,11 +190,11 @@ function settings() {
   const cfg = settingsDraft || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '', apiKey: '' };
   return `<section class="settings-page"><span class="eyebrow">MAKE IT YOURS</span><h1>连接你的 <em>AI。</em></h1><p class="lead">选择模型，把它变成了解你的英语教练。</p><div class="settings-grid"><form id="settings-form" class="card-surface settings-form">
     <label>服务商<select name="provider" ${busy ? 'disabled' : ''}>${Object.entries(data.providers).map(([key, p]) => `<option value="${key}" ${cfg.provider === key ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label>
-    ${cfg.provider === 'codex' ? codexPanel(cfg) : `<label>API 地址<input name="baseURL" type="url" required value="${esc(cfg.baseURL)}" placeholder="https://your-provider.example/v1" ${busy ? 'disabled' : ''}></label><p class="field-help">填写基础地址，通常以 /v1 结尾；不包含 /chat/completions。</p>
+    ${cfg.provider === 'chatgpt' ? renderChatGPTPanel({status:authStatus,loading:authLoading,models:authModels,authURL,cfg,esc,button}) : cfg.provider === 'codex' ? codexPanel(cfg) : `<label>API 地址<input name="baseURL" type="url" required value="${esc(cfg.baseURL)}" placeholder="https://your-provider.example/v1" ${busy ? 'disabled' : ''}></label><p class="field-help">填写基础地址，通常以 /v1 结尾；不包含 /chat/completions。</p>
     <label>模型 ID<input name="model" required maxlength="200" value="${esc(cfg.model)}" placeholder="填写供应商控制台中的模型名称" ${busy ? 'disabled' : ''}></label>
     <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${data.config?.hasKey ? '已保存；同一地址留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
     <div class="form-actions"><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>保存配置</button>${button('测试已保存的连接', 'test-connection', 'secondary-button', data.configured ? '' : 'disabled')}</div>`}</form>
-    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div></section>`;
+    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div>${renderDataSettings({preview:importPreview,esc,button})}</section>`;
 }
 function codexPanel(cfg) {
   const status = codexStatus, login = status?.login;
@@ -178,7 +209,7 @@ function startingPage() {
   return `<section class="starting-page" aria-busy="${!!busy}"><span class="mode-symbol">${icon('mixed')}</span><span class="eyebrow">${esc(goal)} · ${starting?.placement ? '历史练习' : esc(modeName(starting?.mode || '综合')) + '练习'}</span><h1 tabindex="-1" id="starting-title">${busy ? '正在准备第一题' : '暂时没能准备好题目'}</h1><div class="starting-message" role="status">${busy ? '<span class="spinner"></span><span>教练正在结合你的水平安排练习…</span>' : '<span>请检查网络或模型配置，然后重试。</span>'}</div><p>${busy ? '第一题准备好后会自动进入。无需重复点击。' : '已保存的学习记录不受影响。'}</p>${!busy ? button('重新准备', 'start-again') + button('返回学习页', 'home', 'secondary-button') : ''}</section>`;
 }
 function sessionPage() {
-  return renderLearningChat({ session: current(), draft, busy, pendingChat, esc, button, audioState, voiceMessage, speed, recognition });
+  return renderLearningChat({ session: current(), draft, busy, pendingChat, esc, button, audioState, voiceMessage, speed, recognition, usesChatGPT:data.config?.provider==='chatgpt' });
 }
 function summaryPage() {
   const s = detailSession;
@@ -246,6 +277,28 @@ app.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
+  if(action==='data-export') return run('正在准备备份…',exportData);
+  if(action==='data-pick') {
+    if(!native) return app.querySelector('#backup-file').click();
+    return run('正在选择备份…',async()=>{const f=await deviceBridge.importFile();if(!f.cancelled)await previewBackup(f.value);});
+  }
+  if(action==='data-cancel') {importBackup=null;importPreview=null;return render();}
+  if(action==='data-confirm' && importBackup) return run('正在合并学习记录…',async()=>{
+    await api('data/import',{backup:importBackup});const r=data.importSummary;
+    importBackup=null;importPreview=null;notice=`已新增 ${r.added} 轮、更新 ${r.updated} 轮，跳过 ${r.skipped} 轮。`;
+  });
+  if(action==='chatgpt-refresh') return refreshAuth();
+  if(action==='chatgpt-login') return run(native?'请在官方页面完成 ChatGPT 授权…':'正在准备 ChatGPT 授权…',async()=>{
+    const result=await request('chatgpt/login',{accountId:el.dataset.id});
+    if(native) {authStatus=result;authModels=(await request('chatgpt/models')).models;notice='你正在使用 ChatGPT 订阅授权。选择模型并保存即可使用，可在官方用量设置管理。';}
+    else {authURL=result.url;authStatus={...authStatus,login:{state:'pending'}};authPoll=setTimeout(refreshAuth,3000);}
+  });
+  if(['chatgpt-select','chatgpt-logout','chatgpt-cancel'].includes(action)) return run('正在更新 ChatGPT 授权…',async()=>{
+    clearTimeout(authPoll);authURL='';authModels=[];
+    authStatus=await request(`chatgpt/${action.slice(8)}`,{accountId:el.dataset.id});
+    if(authStatus.loggedIn)authModels=(await request('chatgpt/models')).models;
+    if(settingsDraft)settingsDraft.model='';notice=authStatus.message || 'ChatGPT 账号已更新。';
+  });
   if (['home','welcome','settings','review','session','profile','activity','week'].includes(action)) return navigate(action);
   if (action === 'practice') { practiceMode = el.dataset.mode; return navigate('practice'); }
   if (action === 'exam') {
@@ -341,11 +394,16 @@ app.addEventListener('input', event => {
   if (event.target.closest('#settings-form')) settingsDraft = { ...settingsDraft, [event.target.name]: event.target.value };
 });
 app.addEventListener('change', event => {
+  if(event.target.id==='backup-file') {
+    const file=event.target.files[0];if(!file)return;
+    return run('正在检查备份…',async()=>{if(file.size>20*1024*1024)throw new Error('备份超过 20 MB。');await previewBackup(await file.text());});
+  }
   if (event.target.id === 'dashboard-goal') return selectGoal(event.target.value);
   if (event.target.name === 'provider') {
-    clearTimeout(codexPolling);
+    clearTimeout(codexPolling); clearTimeout(authPoll); authURL = ''; authModels = [];
     settingsDraft = { provider: event.target.value, baseURL: data.providers[event.target.value].baseURL, model: '', apiKey: '' };
     render(); if (settingsDraft.provider === 'codex') refreshCodex();
+    if (settingsDraft.provider === 'chatgpt') refreshAuth();
   }
   if (event.target.id === 'audio-speed') { speed = Number(event.target.value); if (audioState !== 'idle') playAudio(true); }
 });
@@ -369,4 +427,7 @@ setInterval(() => {
   }
 }, 1000);
 window.addEventListener('pagehide', () => { stopMedia(); persistDraft(); });
+function updateViewport() { document.documentElement.style.setProperty('--app-height',`${window.visualViewport?.height || window.innerHeight}px`); }
+window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);updateViewport();
+if(native) deviceBridge.safeArea().then(i=>{for(const edge of ['top','bottom','left','right'])document.documentElement.style.setProperty(`--safe-${edge}`,`${i[edge]}px`);}).catch(()=>{});
 run('读取学习记录…', async () => { await api('state'); if (current()) { goal = current().goal; screen = 'session'; } });

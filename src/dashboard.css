@@ -154,3 +154,33 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline:3px 
  .progress-summary { gap:16px;padding:20px; }.progress-level { font-size:32px; }.progress-summary p { font-size:13px; }.starting-page { min-height:65dvh; }
 }
 @media(prefers-reduced-motion:reduce) { .specialty { transition:none; }.specialty:hover:not(:disabled) { transform:none; } }
+
+/* The sticky bar owns the top inset, including after scrolling. A padded html
+   element alone lets it slide underneath the Dynamic Island. Native insets are
+   supplied by UIKit when WKWebView's env() values are unavailable. */
+.topbar { height:calc(var(--header-height) + var(--safe-top)); min-height:calc(var(--header-height) + var(--safe-top)); padding-top:var(--safe-top); }
+.chat-session { height:calc(var(--app-height) - var(--header-height) - var(--safe-top) - var(--safe-bottom) - 32px); min-height:0; }
+.main-content { padding-bottom:calc(42px + var(--safe-bottom)); }
+.chat-main { padding-bottom:12px; }
+.settings-data { max-width:760px; margin:30px auto 0; }
+.settings-data h2 { font-size:20px; margin-bottom:12px; }
+.settings-data p { font-size:13px; line-height:1.9; color:var(--muted); }
+.backup-preview { border:1px solid #d9cdec; background:#f7f3fc; padding:18px; border-radius:12px; margin-top:18px; }
+.chatgpt-signin { background:#202123; color:#fff; border:0; border-radius:10px; padding:13px 20px; min-height:46px; }
+.chatgpt-signin:hover { background:#353638; }
+.chatgpt-accounts { display:grid; gap:10px; margin:16px 0; }
+.chatgpt-accounts button { min-height:44px; }
+.subscription-note { font-size:11px; color:#7e6b94; margin:0 0 8px; }
+.subscription-note a { color:inherit; margin-left:8px; }
+@media(max-width:760px) {
+ :root { --header-height:64px; }
+ .topbar { padding-top:var(--safe-top); }
+ .main-content { padding-bottom:calc(96px + var(--safe-bottom)); }
+ .chat-main { padding-bottom:0; }
+ .chat-session { height:calc(var(--app-height) - var(--header-height) - var(--safe-top) - var(--safe-bottom) - 12px); min-height:0; }
+ .topnav { padding-bottom:calc(9px + var(--safe-bottom)); padding-left:max(8px,var(--safe-left)); padding-right:max(8px,var(--safe-right)); }
+ .settings-page h1 { font-size:30px; }
+ .settings-data { padding:20px; }
+ .settings-data .form-actions { flex-wrap:wrap; }
+ .chat-session-header h1 { font-size:13px; }
+}

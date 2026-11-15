@@ -1,4 +1,5 @@
 export const providers = {
+  chatgpt: { label: 'ChatGPT 订阅账号', protocol: 'chatgpt', baseURL: 'https://api.openai.com/v1' },
   codex: { label: '本机 Codex · ChatGPT 授权', protocol: 'codex', baseURL: '' },
   openai: { label: 'OpenAI', protocol: 'openai', baseURL: 'https://api.openai.com/v1' },
   deepseek: { label: 'DeepSeek', protocol: 'openai', baseURL: 'https://api.deepseek.com/v1' },
@@ -14,10 +15,10 @@ export class AppError extends Error {
 export function validateConfig(input, previous = {}) {
   const preset = providers[input.provider];
   if (!preset) throw new AppError('请选择支持的接口类型。');
-  if (input.provider === 'codex') {
+  if (input.provider === 'codex' || input.provider === 'chatgpt') {
     const model = String(input.model || '').trim();
     if (model.length > 200 || /[\r\n]/.test(model)) throw new AppError('Codex 模型 ID 格式不正确。');
-    return { provider: 'codex', baseURL: '', model };
+    return { provider: input.provider, baseURL: input.provider === 'chatgpt' ? preset.baseURL : '', model };
   }
   const baseURL = String(input.baseURL || preset.baseURL).trim().replace(/\/+$/, '');
   let url;

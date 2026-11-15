@@ -1,0 +1,14 @@
+export function renderDataSettings({preview,esc,button}) {
+  return `<section class="settings-data dash-panel" aria-label="学习数据"><h2>学习数据</h2><p>备份练习、追问和能力画像，可在手机与网页版之间迁移。文件包含你的学习内容，请妥善保存；不包含 API 密钥或 ChatGPT 登录凭据。</p><div class="form-actions">${button('导出备份','data-export','secondary-button')}${button('导入备份','data-pick','secondary-button')}</div><input type="file" id="backup-file" accept="application/json,.json" hidden>
+    ${preview ? `<div class="backup-preview" role="status"><strong>导入预览</strong><p>文件含 ${preview.rounds} 轮练习、${preview.answers} 道作答。新增 ${preview.added} 轮，更新 ${preview.updated} 轮，跳过 ${preview.skipped} 轮。${preview.conflicts ? `有 ${preview.conflicts} 处进度冲突，将保留本机记录。` : ''}</p><p>合并导入会保留当前练习及模型配置。</p><div class="form-actions">${button('确认合并导入','data-confirm')}${button('取消导入','data-cancel','text-button')}</div></div>` : ''}
+    <details class="progress-note"><summary>联网同步</summary><p>当前使用本机存储，可通过备份文件迁移。联网同步尚未启用，后续会作为可选功能提供。</p></details></section>`;
+}
+
+export function renderChatGPTPanel({status,loading,models,authURL,cfg,esc,button}) {
+  return `<div class="codex-account"><div><strong>${loading?'正在读取 ChatGPT 授权…':status?.loggedIn?'已连接 ChatGPT':'使用你的 ChatGPT 订阅'}</strong><p>${status?.loggedIn?esc(status.account.label):'在 OpenAI 官方页面登录并授权，无需 API Key。'}</p></div></div>
+    ${status?.accounts?.length ? `<div class="chatgpt-accounts">${status.accounts.map(a=>`<div><span>${esc(a.label)} ${status.activeId===a.id?'· 当前账号':''}</span> ${button(a.connected?'切换使用':'重新授权',a.connected?'chatgpt-select':'chatgpt-login','text-button',`data-id="${esc(a.id)}" ${status.activeId===a.id?'disabled':''}`)}</div>`).join('')}</div>`:''}
+    ${status?.loggedIn ? `<label>学习模型<select name="model"><option value="">账号默认可用模型</option>${cfg.model && !models.some(m=>m.id===cfg.model)?`<option selected value="${esc(cfg.model)}">${esc(cfg.model)}</option>`:''}${models.map(m=>`<option value="${esc(m.id)}" ${m.id===cfg.model?'selected':''}>${esc(m.name)}</option>`).join('')}</select></label><div class="form-actions"><button type="submit" class="primary-button">使用 ChatGPT 订阅</button>${button('测试已保存的连接','test-connection','secondary-button',cfg.provider==='chatgpt'?'':'disabled')}</div>`:''}
+    ${authURL ? `<div class="codex-login"><strong>等待官方页面授权</strong><p>在打开的页面完成后返回这里，状态会自动更新。</p><a class="chatgpt-signin" href="${esc(authURL)}" target="_blank" rel="noopener noreferrer">前往 ChatGPT 授权 ↗</a>${button('取消本次授权','chatgpt-cancel','text-button')}</div>` : `<div class="form-actions">${button(status?.loggedIn?'连接另一个 ChatGPT 账号':'Continue with ChatGPT','chatgpt-login','chatgpt-signin',loading?'disabled':'')}</div>`}
+    ${status?.loggedIn?button('退出此账号授权','chatgpt-logout','text-button'):''}${button('刷新授权状态','chatgpt-refresh','text-button',loading?'disabled':'')}
+    <p class="field-help">符合条件的 AI 请求使用你的 ChatGPT 订阅额度，权限和用量以官方页面为准。<a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">管理 ChatGPT 用量 ↗</a></p>`;
+}

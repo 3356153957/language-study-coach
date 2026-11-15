@@ -3,6 +3,7 @@ import { goals, modes, prompts, gradingContext, validateTask, validateFeedback, 
 import { validateBackground } from './background.js';
 import { sharedProfile, examEvidence, examOutlook } from './profile.js';
 import { dashboardData, activityData } from './dashboard.js';
+import { exportBackup, planImport } from './backup.js';
 
 
 const randomUUID = () => globalThis.crypto.randomUUID();
@@ -11,11 +12,11 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary?.slice(0, 140) };
   const active = s => s.sessions.find(x => !x.finishedAt);
   function view(options = {}) {
-    if (options.compact) return { configured: state.config?.provider === 'codex' || !!state.config?.apiKey,
+    if (options.compact) return { configured: ['codex','chatgpt'].includes(state.config?.provider) || !!state.config?.apiKey,
       config: state.config ? { provider: state.config.provider, baseURL: state.config.baseURL, model: state.config.model, hasKey: !!state.config.apiKey } : null,
       providers: availableProviders, profile: dashboardProfile(sharedProfile(state)), examOutlook: examOutlook(state),
       ...dashboardData(state, options.timeZone), sessions: state.sessions.filter(s => !s.finishedAt).map(s => publicSession(s)) };
-    return { configured: state.config?.provider === 'codex' || !!state.config?.apiKey, config: state.config ? { provider: state.config.provider, baseURL: state.config.baseURL, model: state.config.model, hasKey: !!state.config.apiKey } : null,
+    return { configured: ['codex','chatgpt'].includes(state.config?.provider) || !!state.config?.apiKey, config: state.config ? { provider: state.config.provider, baseURL: state.config.baseURL, model: state.config.model, hasKey: !!state.config.apiKey } : null,
       providers: availableProviders, profile: sharedProfile(state), profiles: state.profiles, examOutlook: examOutlook(state), backgrounds: state.backgrounds || [], sessions: state.sessions.map(({ prepared, ...s }) => ({ ...s, nextReady: !!prepared, current: s.current ? publicTask(s.current, !!s.feedback) : null })) };
   }
   function profile() { return { profile: sharedProfile(state), examOutlook: examOutlook(state) }; }
@@ -66,7 +67,11 @@ export function createEngine({ initialState = { version: 1, config: null, profil
     session.source = { provider: s.config.provider, model: s.config.model || 'Codex 默认模型' };
   }
   async function mutate(route, input, s) {
-    if (route === '/api/settings') {
+    if (route === '/api/data/import') {
+      const result=planImport(s,input.backup);
+      Object.assign(s,result.state);
+      return result.summary;
+    } else if (route === '/api/settings') {
       if (!availableProviders[input.provider]) throw new AppError('此设备不支持该服务商。');
       s.config = validateConfig(input, s.config || {});
       if (s.config.provider === 'codex' && !(await codex.status()).loggedIn) throw new AppError('请先完成 Codex 授权，再启用。', 409);
@@ -195,6 +200,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   }
   return {
     view, detail, review, profile, activity: offset => activityData(state, offset),
+    backup: () => exportBackup(state), previewImport: input => planImport(state,input).summary,
     async execute(route, input, options) {
       if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
       busy = true;
@@ -204,10 +210,10 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         const draft = { ...state, sessions: state.sessions.map(s => s.finishedAt ? s : structuredClone(s)),
           ...(state.backgrounds ? { backgrounds: state.backgrounds.slice() } : {}),
           ...(state.examEstimates ? { examEstimates: { ...state.examEstimates } } : {}) };
-        await mutate(route, input, draft);
+        const importSummary=await mutate(route, input, draft);
         await save(draft);
         state = draft;
-        return view(options);
+        return { ...view(options), ...(importSummary ? { importSummary } : {}) };
       } finally { busy = false; }
     },
   };

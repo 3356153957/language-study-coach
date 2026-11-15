@@ -1,8 +1,10 @@
 import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { createEngine } from '../server/engine.js';
 import { AppError, providers, callModel } from '../server/providers.js';
+import { createChatGPTAuth } from '../server/chatgpt-auth.js';
 
 const storage = registerPlugin('StudyStorage');
+const device = registerPlugin('StudyDevice');
 export const mobileProviders = Object.fromEntries(Object.entries(providers).filter(([key]) => key !== 'codex'));
 
 export function nativeFetcher(http = CapacitorHttp) {
@@ -14,7 +16,16 @@ export function nativeFetcher(http = CapacitorHttp) {
   };
 }
 
-export async function createNativeClient({ store = storage, compact = false, timeZone = 'UTC', modelCall = (config, system, context) => callModel(config, system, context, nativeFetcher()) } = {}) {
+export function nativeAuthTransport(http = CapacitorHttp) {
+  return async (url, options={}) => {
+    const r=await http.request({url,method:options.method || 'GET',headers:options.headers || {},data:options.body,responseType:'text',connectTimeout:15000,readTimeout:60000,disableRedirects:true});
+    return {ok:r.status>=200 && r.status<300,status:r.status,json:async()=>typeof r.data==='string'?JSON.parse(r.data):r.data,text:async()=>typeof r.data==='string'?r.data:JSON.stringify(r.data)};
+  };
+}
+
+export async function createNativeClient({ store = storage, deviceBridge = device, compact = false, timeZone = 'UTC', chatgpt,
+  modelCall = (config, system, context) => config?.provider==='chatgpt' ? auth.complete(config,system,context) : callModel(config, system, context, nativeFetcher()) } = {}) {
+  const auth=chatgpt || createChatGPTAuth({load:async()=>{const {value}=await store.loadAuth();return value?JSON.parse(value):null;},save:async value=>{await store.saveAuth({value:JSON.stringify(value)});},transport:nativeAuthTransport()});
   let initialState;
   try {
     const { value } = await store.load();
@@ -35,9 +46,22 @@ export async function createNativeClient({ store = storage, compact = false, tim
     if (path === 'activity' && body === undefined) return engine.activity(url.searchParams.get('offset'));
     if (path === 'session/detail' && body === undefined) return engine.detail(url.searchParams.get('id'));
     if (path === 'review' && body === undefined) return engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'));
+    if (path === 'data/export' && body === undefined) return engine.backup();
+    if (path === 'data/preview') return engine.previewImport(body.backup);
+    if (path === 'chatgpt/status') return auth.status();
+    if (path === 'chatgpt/models') return {models:await auth.models()};
+    if (path === 'chatgpt/login') {
+      const {redirectURI}=await deviceBridge.prepareAuth();
+      try {const {url}=await auth.start(redirectURI,body?.accountId); const {callbackURL}=await deviceBridge.openAuth({url});return await auth.finish(callbackURL);}
+      finally {await deviceBridge.cancelAuth();auth.cancel();}
+    }
+    if (path === 'chatgpt/cancel') {await deviceBridge.cancelAuth();auth.cancel();return auth.status();}
+    if (path === 'chatgpt/logout') return auth.logout();
+    if (path === 'chatgpt/select') return auth.select(body.accountId);
     if (path.startsWith('codex/') || path === 'background/import') throw new AppError('手机独立版不提供此功能。', 404);
     if (path === 'session/start' && body?.placement) throw new AppError('请从日常练习开始。');
     if (path === 'settings' && !String(body?.baseURL || mobileProviders[body?.provider]?.baseURL || '').startsWith('https://')) throw new AppError('手机 API 地址须使用 HTTPS。');
+    if (path === 'settings' && body?.provider==='chatgpt' && !(await auth.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
     return engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
   } };
 }
