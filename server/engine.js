@@ -1,6 +1,6 @@
 import { AppError, providers, validateConfig, validateAPIConnection, callModel } from './providers.js';
 import { listModels } from './model-catalog.js';
-import { goals, modes, prompts, gradingContext, validateTask, validateFeedback, validateReport, validateReply } from './coach.js';
+import { goals, modes, prompts, gradingContext, validateTask, validateFeedback, validateLearnerAnswer, validateReport, validateReply } from './coach.js';
 import { validateBackground } from './background.js';
 import { sharedProfile, examEvidence, examOutlook } from './profile.js';
 import { dashboardData, activityData } from './dashboard.js';
@@ -41,6 +41,11 @@ export function createEngine({ initialState = { version: 1, config: null, profil
   }
   function publicTask(task, answered) {
     const { answer, ...rest } = task;
+    if (Array.isArray(rest.questions)) rest.questions = rest.questions.map(question => {
+      if (answered) return question;
+      const { answer: hidden, ...publicQuestion } = question;
+      return publicQuestion;
+    });
     return answered ? { ...rest, answer } : rest;
   }
   function context(s, session) {
@@ -131,8 +136,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         if (input.taskId !== session.current?.id) throw new AppError('题目已变更，请刷新后重试。', 409);
         if (session.feedback) return; // Retry after a lost HTTP response must not grade or count twice.
         const answer = typeof input.answer === 'string' ? input.answer.trim() : '';
-        if (!answer || answer.length > 4000) throw new AppError('请先作答，回答最多 4000 字。');
-        if (session.current.options.length && !session.current.options.includes(answer)) throw new AppError('请选择题卡中的一个选项。');
+        validateLearnerAnswer(session.current, answer);
         const telemetry = { activeSeconds: Math.max(0, Math.min(1800, Math.round(Number(input.activeSeconds) || 0))), hintUsed: !!input.hintUsed || !!session.currentHelpUsed, replays: Math.max(0, Math.min(100, Math.round(Number(input.replays) || 0))), transcriptViewed: !!input.transcriptViewed };
         const prepareNext = session.history.length + 1 < session.targetCount;
         const result = await modelCall(s.config, prepareNext ? prompts.gradeAndNext : prompts.grade, gradingContext({ ...context(s, session), discussion: session.discussions?.[session.current.id] || [] }, session.current, answer, telemetry));

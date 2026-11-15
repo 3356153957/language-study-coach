@@ -16,8 +16,13 @@ export function examEvidence(state, goal) {
     for (let j = round.history.length - 1; j >= 0 && entries.length < 60; j--) entries.push(round.history[j]);
   }
   const independent = entries.filter(e => !e.hintUsed && !e.transcriptViewed);
-  const covered = ['阅读', '听力', '表达'].filter(skill => independent.filter(e => e.task.skill === skill).length >= 3);
-  return { count: independent.length, covered, ready: independent.length >= 20 && covered.length === 3,
+  const skillCounts = Object.fromEntries(['阅读', '听力', '表达'].map(skill => [skill, independent.filter(e => e.task.skill === skill).length]));
+  const covered = Object.keys(skillCounts).filter(skill => skillCounts[skill] >= 3);
+  const countProgress = Math.min(1, independent.length / 20);
+  const skillProgress = Math.min(1, ...Object.values(skillCounts).map(count => count / 3));
+  return { count: independent.length, requiredCount: 20, skillCounts, covered,
+    progress: Math.round(Math.min(countProgress, skillProgress) * 100),
+    ready: independent.length >= 20 && covered.length === 3,
     requirement: '至少 20 道无提示作答，阅读、听力、表达各至少 3 道；这只是生成初步估计的最低样本要求。' };
 }
 

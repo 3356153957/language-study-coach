@@ -325,6 +325,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .exam-heading strong { color:#735796; font-size:20px; white-space:nowrap; }
 .exam-track { position:relative; height:10px; margin-top:20px; border-radius:12px; background:#e7e2ed; overflow:hidden; }
 .exam-track span { position:absolute; top:0; height:100%; border-radius:12px; background:#9b83bb; }
+.task-subprompt { margin: 18px 0 10px; font-size: 15px; line-height: 1.45; letter-spacing: -.02em; }
+.round-subquestion { margin: 15px 0; padding: 12px 14px; border-radius: 12px; background: #faf9f3; }
+.round-subquestion > strong { display:block; line-height:1.5; }
 .exam-track.unknown { background:repeating-linear-gradient(120deg,#e7e2ed 0,#e7e2ed 7px,#f3eff7 7px,#f3eff7 14px); }
 .exam-scale { display:flex; justify-content:space-between; margin:8px 0 12px; color:#93859f; font-size:11px; }
 .exam-content p { font-size:13px; color:#756c7f; line-height:1.8; }

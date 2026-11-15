@@ -345,3 +345,23 @@ test('writing grade-and-next receives the learner wording without its sample ans
   assert.equal(result.body.sessions[0].feedback.suggestion, improved);
   assert.equal(result.body.sessions[0].current.answer, writing.answer);
 });
+
+test('B1 reading and listening tasks can contain multiple questions while hiding keys until answered', async t => {
+  const grouped = { kind: 'choice', skill: '阅读', level: 'B1', reason: '练习文章主旨与细节', prompt: 'Read the passage and answer the questions.', passage: 'Mia takes the early train because it is quiet.', audio: '', options: [], answer: '', hint: '先找原因。', questions: [
+    { prompt: 'Why does Mia take the early train?', options: ['It is quiet.', 'It is free.'], answer: 'It is quiet.' },
+    { prompt: 'What does Mia take?', options: ['A train.', 'A taxi.'], answer: 'A train.' },
+  ] };
+  const h = await harness(t, async (cfg, prompt, ctx) => {
+    if (prompt === prompts.next) return grouped;
+    if (prompt === prompts.grade) return { correct: true, explanation: '两问都答对了。', suggestion: '', weakness: '' };
+    return { feedback: { correct: true, explanation: '两问都答对了。', suggestion: '', weakness: '' }, nextTask: { ...grouped, prompt: 'A different follow-up question.', questions: [{ prompt: 'A follow-up?', options: ['Yes', 'No'], answer: 'Yes' }] } };
+  });
+  await h.request('settings', config);
+  let s = (await h.request('session/start', { goal: '四级', mode: '阅读' })).body.sessions[0];
+  assert.equal(s.current.questions.length, 2);
+  assert.equal(s.current.questions[0].answer, undefined);
+  const answer = JSON.stringify(['It is quiet.', 'A train.']);
+  const result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.sessions[0].history[0].answer, answer);
+});

@@ -40,6 +40,15 @@ try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } cat
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
 const current = () => data?.sessions.find(x => !x.finishedAt);
 const persistDraft = () => sessionStorage.setItem('lsc-answer-v1', JSON.stringify(draft));
+const taskQuestions = task => task?.questions?.length ? task.questions : [{ prompt: task?.prompt || '', options: task?.options || [], answer: task?.answer || '' }];
+function answerComplete(task, value) {
+  const items = taskQuestions(task);
+  if (items.length === 1) return !!String(value || '').trim();
+  try {
+    const values = JSON.parse(value || '[]');
+    return Array.isArray(values) && values.length === items.length && values.every((answer, i) => items[i].options.includes(answer));
+  } catch { return false; }
+}
 const listeningPlayer = createListeningPlayer({
   synth: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance,
   onState: state => { audioState = state; if (screen === 'session' && data) render(); },
@@ -295,10 +304,11 @@ function roundReview(session) {
   return `<section class="round-review" aria-label="本轮逐题回顾"><div class="section-title"><h2>本轮逐题回顾</h2><span class="muted">展开看回答与解析</span></div>${session.history.map((entry, index) => {
     const task = entry.task, feedback = entry.feedback;
     const helpers = [entry.hintUsed && '使用了提示', entry.replays > 0 && `播放听力 ${entry.replays} 次`, entry.transcriptViewed && '查看了听力原文'].filter(Boolean);
+    const items = taskQuestions(task), answers = items.length === 1 ? [entry.answer] : (() => { try { const parsed = JSON.parse(entry.answer); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })();
+    const questionReview = items.map((item, itemIndex) => `<div class="round-subquestion"><strong>${items.length > 1 ? `${itemIndex + 1}. ` : ''}${esc(item.prompt)}</strong>${item.options.length ? `<ol class="round-options" type="A">${item.options.map(option => `<li lang="en" class="${answers[itemIndex] === option ? 'selected' : ''}">${esc(option)}</li>`).join('')}</ol>` : ''}<p>你的回答：<span lang="en">${esc(answers[itemIndex] || '')}</span></p><p>参考答案：<span lang="en">${esc(item.answer)}</span></p></div>`).join('');
     return `<details class="round-question"><summary><span class="round-number">${index + 1}</span><span class="round-question-title"><strong>${esc(task.skill)} · ${esc(task.level)}</strong><span>${esc(task.prompt)}</span></span><span class="round-result ${feedback.correct ? 'right' : 'wrong'}">${feedback.correct ? '答对' : '再巩固'}</span></summary><div class="round-answer">
       ${task.passage ? `<div class="reading-passage" lang="en">${esc(task.passage)}</div>` : ''}${task.audio ? `<div class="round-material"><strong>听力原文</strong><p lang="en">${esc(task.audio)}</p></div>` : ''}
-      ${task.options.length ? `<ol class="round-options" type="A">${task.options.map(option => `<li lang="en">${esc(option)}</li>`).join('')}</ol>` : ''}
-      <div class="round-answer-pair"><div><span>你的回答</span><p lang="en">${esc(entry.answer)}</p></div><div><span>参考答案</span><p lang="en">${esc(task.answer)}</p></div></div>
+      ${questionReview}
       <div class="round-explanation"><strong>理解这道题</strong><p>${esc(feedback.explanation)}</p>${feedback.suggestion ? `<p><strong>表达建议</strong><br>${esc(feedback.suggestion)}</p>` : ''}</div>
       ${(session.discussions?.[task.id] || []).length ? `<details class="saved-discussion"><summary>查看这道题的追问记录</summary>${session.discussions[task.id].map(turn => `<div><strong>你</strong><p class="chat-text">${esc(turn.message)}</p><strong>英语教练</strong><p class="chat-text">${esc(turn.reply)}</p></div>`).join('')}</details>` : ''}
       <p class="field-help">作答 ${duration(entry.activeSeconds)}${helpers.length ? ` · ${helpers.join(' · ')}` : ''}</p>
@@ -458,7 +468,13 @@ app.addEventListener('click', async event => {
       draft.coachMessage = ''; draft.coachRequestId = null; persistDraft(); chatScrollToEnd = true;
     });
   }
-  if (action === 'answer-option') { draft.answer = s.current.options[Number(el.dataset.index)]; persistDraft(); return render(); }
+  if (action === 'answer-option') {
+    const items = taskQuestions(s.current), questionIndex = Number(el.dataset.questionIndex || 0), option = items[questionIndex]?.options[Number(el.dataset.index)];
+    if (option === undefined) return;
+    if (items.length === 1) draft.answer = option;
+    else { let values; try { values = JSON.parse(draft.answer || '[]'); } catch { values = []; } if (!Array.isArray(values) || values.length !== items.length) values = Array(items.length).fill(''); values[questionIndex] = option; draft.answer = JSON.stringify(values); }
+    persistDraft(); return render();
+  }
   if (action === 'hint') { draft.hintUsed = true; persistDraft(); return render(); }
   if (action === 'transcript') { draft.transcriptViewed = true; persistDraft(); return render(); }
   if (action === 'audio' || action === 'replay') return playAudio(action === 'replay');
@@ -476,7 +492,7 @@ app.addEventListener('click', async event => {
 });
 app.addEventListener('input', event => {
   if(event.target.closest('#sync-panel') && event.target.name) syncFields[event.target.name]=event.target.value;
-  if (event.target.id === 'answer-text') { draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !draft.answer.trim(); }
+  if (event.target.id === 'answer-text') { draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); }
   if (event.target.id === 'coach-message') { draft.coachMessage = event.target.value; draft.coachRequestId = null; persistDraft(); const send = app.querySelector('[data-action="send-coach"]'); if (send) send.disabled = !draft.coachMessage.trim(); }
   if (event.target.id === 'model-search') {
     modelCatalog.query = event.target.value;
