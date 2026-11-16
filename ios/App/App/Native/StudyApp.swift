@@ -39,7 +39,7 @@ let studySkills=["阅读","听力","词汇","语法","表达"]
 func skillSymbol(_ value:String)->String{["阅读":"book","听力":"headphones","词汇":"character.book.closed","语法":"textformat.abc","表达":"square.and.pencil"] [value] ?? "sparkles"}
 struct GoalMenu:View {
     @EnvironmentObject var store:StudyStore
-    var body:some View{Menu{ForEach(studyGoals,id:\.self){goal in Button(goal){store.goal=goal;UserDefaults.standard.set(goal,forKey:"native-goal")}}}label:{Label(store.goal,systemImage:"chevron.down").font(.subheadline.weight(.medium))}}
+    var body:some View{Menu{ForEach(studyGoals,id:\.self){goal in Button(goal){store.goal=goal;UserDefaults.standard.set(goal,forKey:"native-goal")}}}label:{HStack(spacing:6){Text(store.goal);Image(systemName:"chevron.down")}.font(.subheadline.weight(.medium))}.accessibilityIdentifier("learning-goal")}
 }
 struct HomeScreen:View {
     @EnvironmentObject var store:StudyStore

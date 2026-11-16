@@ -33,7 +33,7 @@ enum J: Codable, Equatable {
     static func s(_ text:String)->J{.string(text)}
     static func n(_ value:Int)->J{.number(Double(value))}
 }
-struct StudyError:LocalizedError {let message:String;init(_ text:String){message=text};var errorDescription:String?{message}}
+struct StudyError:LocalizedError {let message:String;let code:Int32?;init(_ text:String,code:Int32?=nil){message=text;self.code=code};var errorDescription:String?{message}}
 
 // Uses the exact Keychain service/account and AES-GCM format of the earlier IPA.
 struct StudyVault {
@@ -43,10 +43,11 @@ struct StudyVault {
         var lookup=query;lookup[kSecReturnData as String]=true;lookup[kSecMatchLimit as String]=kSecMatchLimitOne
         var result:CFTypeRef?;let status=SecItemCopyMatching(lookup as CFDictionary,&result)
         if status==errSecSuccess,let data=result as? Data{return SymmetricKey(data:data)}
-        guard status==errSecItemNotFound,create else{throw StudyError("无法读取本机加密密钥，请勿卸载应用。")}
+        guard status==errSecItemNotFound,create else{throw StudyError("无法读取本机加密密钥，请勿卸载应用。",code:status)}
         let key=SymmetricKey(size:.bits256);var record=query
         record[kSecValueData as String]=key.withUnsafeBytes{Data($0)};record[kSecAttrAccessible as String]=kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(record as CFDictionary,nil)==errSecSuccess else{throw StudyError("无法保存本机加密密钥。")};return key
+        let added=SecItemAdd(record as CFDictionary,nil)
+        guard added==errSecSuccess else{throw StudyError("无法保存本机加密密钥。",code:added)};return key
     }
     func read(_ name:String)throws->String? {
         let file=try directory.appendingPathComponent(name+".enc")
