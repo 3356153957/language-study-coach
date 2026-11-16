@@ -1,7 +1,7 @@
 import XCTest
 
 final class NativeUITests:XCTestCase {
-    func capture(_ app:XCUIApplication,_ name:String){let shot=XCTAttachment(screenshot:app.screenshot());shot.name=name;shot.lifetime = .keepAlways;add(shot)}
+    func capture(_ app:XCUIApplication,_ name:String){let shot=XCTAttachment(screenshot:XCUIScreen.main.screenshot());shot.name=name;shot.lifetime = .keepAlways;add(shot)}
     func testNativeKeyboardMultiAnswerAndFeedback(){
         let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
         XCTAssertTrue(app.buttons["start-写作"].waitForExistence(timeout:20));capture(app,"01-native-home")
@@ -39,8 +39,10 @@ final class NativeUITests:XCTestCase {
         defer{XCUIDevice.shared.orientation = .portrait}
         first.tap();first.typeText("I had prepared the plates.")
         let keyboard=app.keyboards.firstMatch;XCTAssertTrue(keyboard.waitForExistence(timeout:5))
-        let visible=NSPredicate{_,_ in first.isHittable && first.frame.minY>=app.frame.minY && first.frame.maxY<=keyboard.frame.minY}
+        let visible=NSPredicate{_,_ in app.frame.width>app.frame.height && first.isHittable && first.frame.width>0 && first.frame.height>0 && first.frame.minX>=app.frame.minX && first.frame.maxX<=app.frame.maxX && first.frame.minY>=app.frame.minY && first.frame.maxY<=keyboard.frame.minY}
         expectation(for:visible,evaluatedWith:first);waitForExpectations(timeout:5)
+        XCTAssertEqual(first.value as? String,"I had prepared the plates.")
+        print("Landscape bounds: app=\(app.frame), answer=\(first.frame), keyboard=\(keyboard.frame)")
         XCTAssertEqual(app.webViews.count,0);capture(app,"06-native-landscape-keyboard")
     }
 }

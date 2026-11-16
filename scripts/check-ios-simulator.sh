@@ -6,10 +6,11 @@ mkdir -p "$OUT"
 RUNTIME=$(xcrun simctl list runtimes available --json | python3 -c 'import json,sys; r=[r for r in json.load(sys.stdin)["runtimes"] if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")]; print(sorted(r,key=lambda x:tuple(map(int,x["version"].split("."))))[-1]["identifier"])')
 DEVICE=$(xcrun simctl create LanguageStudyCoach-QA com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro "$RUNTIME")
 trap 'xcrun simctl shutdown "$DEVICE" || true' EXIT
+defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+# Compile before booting the simulator to leave memory available for Swift/Xcode.
+xcodebuild -project ios/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" build CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | tee "$OUT/build.log"
 xcrun simctl boot "$DEVICE"
 xcrun simctl bootstatus "$DEVICE" -b
-defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
-xcodebuild -project ios/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" build CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- > "$OUT/build.log" 2>&1 || { tail -80 "$OUT/build.log"; exit 1; }
 xcrun simctl status_bar "$DEVICE" override --time '9:41' --batteryState charged --batteryLevel 100
 xcrun simctl install "$DEVICE" "$OUT/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
 xcrun simctl launch "$DEVICE" com.languagestudycoach.app
