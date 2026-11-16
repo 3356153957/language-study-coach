@@ -37,7 +37,7 @@ jobs:
       - name: Generate native SwiftUI project
         run: |
           command -v xcodegen || brew install xcodegen
-          xcodegen generate --spec ios/project.yml --project ios/App
+          xcodegen generate --spec ios/project.yml --project ios
       - name: Import signing assets
         if: inputs.signed
         env:
@@ -68,6 +68,12 @@ jobs:
           name: language-study-coach-ios-${{ inputs.signed && 'signed' || 'unsigned' }}
           path: build/ios/*.ipa
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-build-logs
+          path: build/ios/*.log
+          if-no-files-found: ignore
       - name: Check iPhone 16 Pro simulator
         if: inputs.simulator
         run: bash scripts/check-ios-simulator.sh
