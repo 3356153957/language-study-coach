@@ -1,6 +1,40 @@
 import XCTest
 
 final class NativeUITests:XCTestCase {
+    func launchExamFixture(withEstimate:Bool)->XCUIApplication{
+        let file=Bundle(for:Self.self).url(forResource:"exam-backup",withExtension:"json")!
+        let backup=try! JSONSerialization.jsonObject(with:Data(contentsOf:file)) as! [String:Any]
+        var state=backup["data"] as! [String:Any];state["version"]=1
+        if !withEstimate{
+            var sessions=state["sessions"] as! [[String:Any]]
+            var report=sessions[sessions.count-1]["report"] as! [String:Any];report["examEstimate"]=NSNull()
+            sessions[sessions.count-1]["report"]=report;state["sessions"]=sessions
+        }
+        let app=XCUIApplication();app.launchArguments=["--ui-testing"]
+        app.launchEnvironment["LSC_UI_TEST_STATE"]=String(data:try! JSONSerialization.data(withJSONObject:state),encoding:.utf8)!
+        app.launch();return app
+    }
+    func openExam(_ app:XCUIApplication){
+        XCTAssertTrue(app.buttons["learning-goal"].waitForExistence(timeout:15))
+        app.buttons["learning-goal"].tap();app.buttons["四级"].tap()
+        let link=app.buttons["exam-progress"]
+        for _ in 0..<6{if link.isHittable{break};app.swipeUp()}
+        XCTAssertTrue(link.isHittable);link.tap()
+    }
+    func testImportedPredictionIsVisibleWithoutCache(){
+        let app=launchExamFixture(withEstimate:true);openExam(app)
+        let estimate=app.staticTexts["exam-estimate"]
+        XCTAssertTrue(estimate.waitForExistence(timeout:10));XCTAssertEqual(estimate.label,"30–60%")
+        XCTAssertTrue(app.staticTexts["生成于 2026-11-14"].exists)
+        capture(app,"07-native-restored-prediction")
+    }
+    func testEligibleSamplesWithoutEstimateExplainNextStep(){
+        let app=launchExamFixture(withEstimate:false);openExam(app)
+        let status=app.staticTexts["exam-status"]
+        XCTAssertTrue(status.waitForExistence(timeout:10));XCTAssertEqual(status.label,"暂未形成预测")
+        XCTAssertTrue(app.staticTexts["exam-message"].label.contains("最低样本已满足"))
+        capture(app,"08-native-prediction-pending")
+    }
     func capture(_ app:XCUIApplication,_ name:String){let shot=XCTAttachment(screenshot:XCUIScreen.main.screenshot());shot.name=name;shot.lifetime = .keepAlways;add(shot)}
     func testNativeKeyboardMultiAnswerAndFeedback(){
         let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dashboardData } from '../server/dashboard.js';
 import { createEngine } from '../server/engine.js';
+import { renderDashboard, renderProfile } from '../src/dashboard.js';
+import { predictionFixture } from './fixtures/exam-fixture.js';
 
 const entry = (id, correct = false, at = '2026-11-01T12:00:00Z') => ({ id, at, activeSeconds: 60,
   task: { id: `t${id}`, skill: '阅读', answer: 'A', options: ['A', 'B'] }, answer: 'B', feedback: { correct } });
@@ -10,6 +12,18 @@ const archive = () => Array.from({ length: 30 }, (_, i) => ({ id: `s${i}`, goal:
 const makeEngine = (sessions, overrides = {}) => createEngine({ initialState: { sessions, profiles: {},
   backgrounds: [{ private: 'learner context' }], config: { provider: 'compatible', apiKey: 'test-only' } },
   save: async () => {}, modelCall: async () => ({ ok: true }), ...overrides });
+
+test('web prediction card and detail show the recovered range and date instead of an empty accumulation state', () => {
+  const initialState=predictionFixture(); delete initialState.examEstimates;
+  const data=createEngine({initialState,save:async()=>{}}).view({compact:true});
+  const args={data,goal:'四级',esc:String,button:()=>'',date:String};
+  for(const html of [renderDashboard(args),renderProfile(args)]){
+    assert.match(html,/30–60%/);assert.match(html,/2026-11-14/);
+  }
+  data.examOutlook['六级']={ready:true,progress:100,statusText:'等待学习小结',message:'完成六级学习小结后尝试预测。'};
+  const html=renderDashboard({...args,goal:'六级'});
+  assert.match(html,/完成六级学习小结/);assert.doesNotMatch(html,/完成四级小结/);
+});
 
 test('activity lists every completed round in bounded pages across goals without answers or active rounds', () => {
   const sessions = archive();

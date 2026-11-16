@@ -25,14 +25,43 @@ test('writing and reading enforce actual task content, not just renamed buttons'
   assert.throws(() => validateTask(reading, { mode: '写作', history: [] }), /练习方式/);
 });
 
-test('exam estimates are target-specific and withheld for insufficient or assisted evidence', () => {
+test('exam estimates stay target-specific and historical results survive a changing evidence window', () => {
   const entries = Array.from({ length: 24 }, (_, i) => ({ task: { skill: ['阅读', '听力', '表达'][i % 3] }, hintUsed: false, transcriptViewed: false }));
   const state = { sessions: [{ goal: '四级', history: entries }], examEstimates: { 四级: { low: 30, high: 60, reason: '示例' } } };
   assert.equal(examOutlook(state)['四级'].estimate.high, 60);
   assert.equal(examOutlook(state)['六级'].estimate, null);
   entries.forEach(e => { e.hintUsed = true; });
-  assert.equal(examOutlook(state)['四级'].estimate, null);
+  assert.equal(examOutlook(state)['四级'].estimate.high, 60);
+  assert.equal(examOutlook(state)['四级'].status, 'historical');
   assert.equal(examOutlook(state)['四级'].count, 0);
+});
+
+test('latest valid archived prediction wins over stale cache and newer empty reports', () => {
+  const report = (date, goal, estimate) => ({ goal, finishedAt: date, history: [], report: { examEstimate: estimate } });
+  const state = { sessions: [
+    report('2026-11-14', '四级', { low: 40, high: 70, reason: '较新的四级依据' }),
+    report('2026-11-13', '四级', { low: 20, high: 50, reason: '较早的依据' }),
+    report('2026-11-15', '四级', null),
+    report('2026-11-16', '六级', { low: 10, high: 40, reason: '六级依据' }),
+    report('2026-11-17', '四级', { low: 80, high: 81, reason: '无效区间' }),
+  ], examEstimates: { 四级: { low: 20, high: 50, reason: '旧缓存', updatedAt: '2026-11-13' } } };
+  const before = structuredClone(state), outlook = examOutlook(state);
+  assert.equal(outlook['四级'].estimate.high, 70);
+  assert.equal(outlook['四级'].estimate.updatedAt, '2026-11-14T00:00:00.000Z');
+  assert.equal(outlook['六级'].estimate.high, 40);
+  assert.deepEqual(state, before);
+});
+
+test('eligible samples distinguish waiting for a summary from a summary without a valid estimate', () => {
+  const history = Array.from({ length: 24 }, (_, i) => ({ task: { skill: ['阅读', '听力', '表达'][i % 3] } }));
+  const round = { goal: '六级', history };
+  const state = { sessions: [round] };
+  assert.equal(examOutlook(state)['六级'].status, 'awaiting_summary');
+  assert.match(examOutlook(state)['六级'].message, /六级.*小结/);
+  round.finishedAt = '2026-11-16'; round.report = { examEstimate: null };
+  assert.equal(examOutlook(state)['六级'].status, 'no_estimate');
+  assert.match(examOutlook(state)['六级'].message, /未给出有效区间/);
+  assert.equal(examOutlook(state)['四级'].status, 'collecting');
 });
 
 test('malformed or overly precise probability estimates do not discard a valid learning report', () => {

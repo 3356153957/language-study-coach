@@ -206,12 +206,14 @@ export function createEngine({ initialState = { version: 1, config: null, profil
             if (!thisRound.has(x.name) && saved) return saved;
             return observed.has(x.name) ? x : { name: x.name, level: '未测评', evidence: '还没有该能力的作答记录。' };
           });
-          session.report = report;
+          const eligible = !session.placement && reportContext.examEvidence?.ready;
+          if (!eligible) report.examEstimate = null;
+          session.report = { ...report, updatedAt: new Date().toISOString() };
           const { examEstimate, ...abilityProfile } = report;
-          s.profile = { ...abilityProfile, updatedAt: new Date().toISOString() };
-          if (['四级', '六级'].includes(session.goal)) {
+          s.profile = { ...abilityProfile, updatedAt: session.report.updatedAt };
+          if (eligible && report.examEstimate) {
             s.examEstimates ||= {};
-            s.examEstimates[session.goal] = examEvidence(s, session.goal).ready && report.examEstimate ? { ...report.examEstimate, updatedAt: s.profile.updatedAt } : null;
+            s.examEstimates[session.goal] = { ...report.examEstimate, updatedAt: s.profile.updatedAt };
           }
         }
         session.finishedAt = new Date().toISOString();

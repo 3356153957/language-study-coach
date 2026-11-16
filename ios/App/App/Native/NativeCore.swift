@@ -79,6 +79,9 @@ struct StudyVault {
         self.fixture=fixture
         var stores:[String:String]=[:]
         if fixture{stores["learning-state"]=Self.fixtureState}
+        #if DEBUG
+        if fixture, let state=ProcessInfo.processInfo.environment["LSC_UI_TEST_STATE"]{stores["learning-state"]=state}
+        #endif
         if !fixture {do{for name in ["learning-state","chatgpt-auth","cloud-sync"]{stores[name]=try vault.read(name)}}catch{startupError="无法读取手机上的加密记录，原文件已保留。请勿卸载应用。"}}
         context.exceptionHandler={ [weak self] _,_ in self?.startupError="手机学习服务暂时无法启动，请保留本机记录并更新应用。" }
         let load:@convention(block)(String)->String={ [weak self] name in

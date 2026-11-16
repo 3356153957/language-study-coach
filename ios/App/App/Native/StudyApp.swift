@@ -55,7 +55,7 @@ struct HomeScreen:View {
                 Text("专项练习").font(.headline)
                 specialties
                 NavigationLink{ActivityScreen()}label:{WeeklyTable(days:days)}.buttonStyle(.plain)
-                if ["四级","六级"].contains(store.goal){NavigationLink{ExamProgressScreen(goal:store.goal)}label:{ExamPanel(goal:store.goal,value:store.state["examOutlook"][store.goal])}.buttonStyle(.plain)}
+                if ["四级","六级"].contains(store.goal){NavigationLink{ExamProgressScreen(goal:store.goal)}label:{ExamPanel(goal:store.goal,value:store.state["examOutlook"][store.goal])}.buttonStyle(.plain).accessibilityIdentifier("exam-progress")}
                 recent
             }.padding(20)}
             .background(StudyStyle.background).navigationTitle("学习概览").toolbar{GoalMenu()}
@@ -125,13 +125,16 @@ struct ExamPanel:View {
         Panel{
             HStack{Label(goal+"通过率",systemImage:"target").font(.headline);Spacer();Image(systemName:"chevron.right").foregroundStyle(.secondary)}
             if value["estimate"].exists{
-                Text("\(value["estimate"]["low"].int)–\(value["estimate"]["high"].int)%").font(.title2.bold())
+                Text("最近一次预测").font(.subheadline)
+                Text("\(value["estimate"]["low"].int)–\(value["estimate"]["high"].int)%").font(.title2.bold()).accessibilityIdentifier("exam-estimate")
+                Text(value["estimate"]["updatedAt"].text.isEmpty ? "历史预测 · 生成日期未记录":"生成于 "+String(value["estimate"]["updatedAt"].text.prefix(10))).font(.caption).foregroundStyle(.secondary)
                 Text(value["estimate"]["reason"].text).font(.caption).foregroundStyle(.secondary)
             }else{
-                Text("预测依据积累中").font(.subheadline)
+                Text(value["statusText"].text).font(.subheadline).accessibilityIdentifier("exam-status")
                 ProgressView(value:Double(value["progress"].int),total:100).tint(StudyStyle.purple)
                 Text("已积累 \(value["count"].int) 道独立作答 · 查看各项进度").font(.caption).foregroundStyle(.secondary)
             }
+            Text(value["message"].text).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("exam-message")
             Text("AI 学习建议，仅供备考参考").font(.caption2).foregroundStyle(.secondary)
         }
     }

@@ -105,9 +105,12 @@ export function validateFeedback(data, task, answer) {
   return { correct: data.correct, explanation: str(data.explanation), suggestion: task.options.length || suggestion === answer ? '' : suggestion, weakness: data.correct ? '' : str(data.weakness, 1000) };
 }
 
+export function validateExamEstimate(e) {
+  return e && Number.isInteger(e.low) && Number.isInteger(e.high) && e.low >= 0 && e.high <= 100 && e.high - e.low >= 20 && typeof e.reason === 'string' && e.reason.trim() && e.reason.length <= 1500 ? { low: e.low, high: e.high, reason: e.reason.trim() } : null;
+}
+
 export function validateReport(data) {
   if (!Array.isArray(data.skills) || data.skills.length !== skills.length || new Set(data.skills.map(x => x.name)).size !== skills.length || data.skills.some(x => !skills.includes(x.name))) throw new AppError('模型画像缺少能力分项，请重试。', 502);
-  const e = data.examEstimate;
-  const examEstimate = e && Number.isInteger(e.low) && Number.isInteger(e.high) && e.low >= 0 && e.high <= 100 && e.high - e.low >= 20 && typeof e.reason === 'string' && e.reason.trim() && e.reason.length <= 1500 ? { low: e.low, high: e.high, reason: e.reason.trim() } : null;
+  const examEstimate = validateExamEstimate(data.examEstimate);
   return { level: str(data.level, 60), summary: str(data.summary, 3000), nextFocus: str(data.nextFocus, 1500), skills: data.skills.map(x => ({ name: x.name, level: str(x.level, 60), evidence: str(x.evidence, 2000) })), examEstimate };
 }

@@ -1,0 +1,921 @@
+{
+  "format": "language-study-coach",
+  "version": 1,
+  "exportedAt": "2026-11-16T09:13:21.874Z",
+  "data": {
+    "sessions": [
+      {
+        "id": "round-0",
+        "goal": "四级",
+        "mode": "综合",
+        "placement": false,
+        "targetCount": 5,
+        "startedAt": "2026-11-14T10:00:00.000Z",
+        "history": [
+          {
+            "id": "entry-0-0",
+            "task": {
+              "id": "task-entry-0-0",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-0-1",
+            "task": {
+              "id": "task-entry-0-1",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-0-2",
+            "task": {
+              "id": "task-entry-0-2",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-0-3",
+            "task": {
+              "id": "task-entry-0-3",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-0-4",
+            "task": {
+              "id": "task-entry-0-4",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          }
+        ],
+        "finishedAt": "2026-11-14T10:00:00.000Z",
+        "report": null,
+        "current": null,
+        "feedback": null,
+        "prepared": null
+      },
+      {
+        "id": "round-1",
+        "goal": "四级",
+        "mode": "综合",
+        "placement": false,
+        "targetCount": 5,
+        "startedAt": "2026-11-14T10:00:00.000Z",
+        "history": [
+          {
+            "id": "entry-1-0",
+            "task": {
+              "id": "task-entry-1-0",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-1-1",
+            "task": {
+              "id": "task-entry-1-1",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-1-2",
+            "task": {
+              "id": "task-entry-1-2",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-1-3",
+            "task": {
+              "id": "task-entry-1-3",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-1-4",
+            "task": {
+              "id": "task-entry-1-4",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          }
+        ],
+        "finishedAt": "2026-11-14T10:00:00.000Z",
+        "report": null,
+        "current": null,
+        "feedback": null,
+        "prepared": null
+      },
+      {
+        "id": "round-2",
+        "goal": "四级",
+        "mode": "综合",
+        "placement": false,
+        "targetCount": 5,
+        "startedAt": "2026-11-14T10:00:00.000Z",
+        "history": [
+          {
+            "id": "entry-2-0",
+            "task": {
+              "id": "task-entry-2-0",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-2-1",
+            "task": {
+              "id": "task-entry-2-1",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-2-2",
+            "task": {
+              "id": "task-entry-2-2",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-2-3",
+            "task": {
+              "id": "task-entry-2-3",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-2-4",
+            "task": {
+              "id": "task-entry-2-4",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          }
+        ],
+        "finishedAt": "2026-11-14T10:00:00.000Z",
+        "report": null,
+        "current": null,
+        "feedback": null,
+        "prepared": null
+      },
+      {
+        "id": "round-3",
+        "goal": "四级",
+        "mode": "综合",
+        "placement": false,
+        "targetCount": 5,
+        "startedAt": "2026-11-14T10:00:00.000Z",
+        "history": [
+          {
+            "id": "entry-3-0",
+            "task": {
+              "id": "task-entry-3-0",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-3-1",
+            "task": {
+              "id": "task-entry-3-1",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-3-2",
+            "task": {
+              "id": "task-entry-3-2",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-3-3",
+            "task": {
+              "id": "task-entry-3-3",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-3-4",
+            "task": {
+              "id": "task-entry-3-4",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          }
+        ],
+        "finishedAt": "2026-11-14T10:00:00.000Z",
+        "report": null,
+        "current": null,
+        "feedback": null,
+        "prepared": null
+      },
+      {
+        "id": "round-4",
+        "goal": "四级",
+        "mode": "综合",
+        "placement": false,
+        "targetCount": 5,
+        "startedAt": "2026-11-14T10:00:00.000Z",
+        "history": [
+          {
+            "id": "entry-4-0",
+            "task": {
+              "id": "task-entry-4-0",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-4-1",
+            "task": {
+              "id": "task-entry-4-1",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-4-2",
+            "task": {
+              "id": "task-entry-4-2",
+              "kind": "listening",
+              "skill": "听力",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "The plates are on the table.",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [
+                "On the table.",
+                "On the desk."
+              ],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-4-3",
+            "task": {
+              "id": "task-entry-4-3",
+              "kind": "text",
+              "skill": "表达",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          },
+          {
+            "id": "entry-4-4",
+            "task": {
+              "id": "task-entry-4-4",
+              "kind": "text",
+              "skill": "阅读",
+              "level": "B1",
+              "reason": "练习理解",
+              "prompt": "Where are the plates?",
+              "passage": "The plates are on the table.",
+              "translation": "",
+              "audio": "",
+              "answer": "On the table.",
+              "hint": "留意位置。",
+              "options": [],
+              "questions": null
+            },
+            "answer": "On the table.",
+            "feedback": {
+              "correct": true,
+              "explanation": "正确",
+              "suggestion": "",
+              "weakness": ""
+            },
+            "at": "2026-11-14T10:00:00.000Z",
+            "askedAt": "2026-11-14T10:00:00.000Z",
+            "activeSeconds": 0,
+            "replays": 0,
+            "hintUsed": false,
+            "transcriptViewed": false
+          }
+        ],
+        "finishedAt": "2026-11-14T10:00:00.000Z",
+        "report": {
+          "level": "B1",
+          "summary": "学习观察",
+          "nextFocus": "继续阅读与听力",
+          "skills": [
+            {
+              "name": "阅读",
+              "level": "B1",
+              "evidence": "练习记录"
+            },
+            {
+              "name": "听力",
+              "level": "B1",
+              "evidence": "练习记录"
+            },
+            {
+              "name": "词汇",
+              "level": "B1",
+              "evidence": "练习记录"
+            },
+            {
+              "name": "语法",
+              "level": "B1",
+              "evidence": "练习记录"
+            },
+            {
+              "name": "表达",
+              "level": "B1",
+              "evidence": "练习记录"
+            }
+          ],
+          "examEstimate": {
+            "low": 30,
+            "high": 60,
+            "reason": "历史练习的初步估计，仍需补充考试材料。"
+          }
+        },
+        "current": null,
+        "feedback": null,
+        "prepared": null
+      }
+    ],
+    "profile": null,
+    "backgrounds": []
+  }
+}

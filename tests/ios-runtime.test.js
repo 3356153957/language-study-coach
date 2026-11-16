@@ -5,8 +5,27 @@ import crypto from 'node:crypto';
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { exportBackup } from '../server/backup.js';
+import { predictionFixture } from './fixtures/exam-fixture.js';
 
 const bundle=(await build({entryPoints:['src/ios-runtime.js'],bundle:true,write:false,format:'iife',platform:'browser',target:'safari16'})).outputFiles[0].text;
+
+test('SwiftUI restores the archived CET prediction after backup import and process restart without any model request',async()=>{
+  const h=harness();let restarted;
+  try{
+    const backup=exportBackup(predictionFixture());
+    await h.request('data/import',{backup});
+    restarted=harness({stores:h.stores});
+    for(const device of [h,restarted]){
+      assert.equal(device.startupError,undefined);
+      const outlook=(await device.request('state')).examOutlook;
+      assert.equal(outlook['四级'].estimate?.high,60);
+      assert.equal(outlook['四级'].estimate.updatedAt,'2026-11-14T10:00:00.000Z');
+      assert.equal(outlook['六级'].estimate,null);
+      assert.equal(device.calls.length,0);
+    }
+  }finally{h.close();restarted?.close();}
+});
 function harness({stores=new Map(),http,native}={}) {
   const timers=new Map(),cancelled=[],calls=[];let timerID=0,failWrites=false;
   const question={kind:'text',skill:'表达',level:'A2',prompt:'Tell me about dinner.',passage:'',audio:'',options:[],answer:'I prepared the plates.',hint:'想想准备工作。',reason:'Native fixture.',questions:[{prompt:'What did you prepare?',options:[],answer:'I prepared the plates.'},{prompt:'What will you cook?',options:[],answer:'I will cook rice.'}]};
