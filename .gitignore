@@ -9,6 +9,8 @@ build/
 output/
 .playwright-cli/
 ios/App/App/NativeResources/
+ios/App.xcodeproj/
+ios/App/App/Native/Info.plist
 supabase/.temp/
 *.p12
 *.mobileprovision

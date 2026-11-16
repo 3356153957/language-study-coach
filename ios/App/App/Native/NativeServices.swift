@@ -52,50 +52,103 @@ enum SignedIdentity {
 }
 
 @MainActor final class StudyAuthorization:NSObject,SFSafariViewControllerDelegate {
-    var listener:NWListener?,safari:SFSafariViewController?,redirectURI:String?
-    var pending:CheckedContinuation<String,Error>?,timeout:DispatchWorkItem?
-    func cancel(){listener?.cancel();listener=nil;timeout?.cancel();timeout=nil;safari?.dismiss(animated:true);safari=nil;redirectURI=nil;if let c=pending{pending=nil;c.resume(throwing:StudyError("已取消 ChatGPT 授权。"))}}
+    private var listener:NWListener?
+    private var safari:SFSafariViewController?
+    private var redirectURI:String?
+    private var preparation:CheckedContinuation<String,Error>?
+    private var pending:CheckedContinuation<String,Error>?
+    private var preparationTimeout:Task<Void,Never>?
+    private var timeout:Task<Void,Never>?
+    private var attempt=UUID()
+
+    func cancel(){close("已取消 ChatGPT 授权。")}
+    private func close(_ reason:String){
+        attempt=UUID()
+        listener?.cancel();listener=nil
+        preparationTimeout?.cancel();preparationTimeout=nil
+        timeout?.cancel();timeout=nil
+        safari?.dismiss(animated:true);safari=nil;redirectURI=nil
+        let preparing=preparation,waiting=pending;preparation=nil;pending=nil
+        preparing?.resume(throwing:StudyError(reason));waiting?.resume(throwing:StudyError(reason))
+    }
     func prepare()async throws->String{
         cancel()
-        let params=NWParameters.tcp;params.requiredLocalEndpoint = .hostPort(host:"127.0.0.1",port:.any)
+        let generation=attempt
+        let parameters=NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host:"127.0.0.1",port:.any)
         let server:NWListener
-        do{server=try NWListener(using:params)}catch{throw StudyError("无法准备本机授权连接，请重试。")}
+        do{server=try NWListener(using:parameters)}catch{throw StudyError("无法准备本机授权连接，请重试。")}
         listener=server
-        return try await withCheckedThrowingContinuation{c in
-            var answered=false
+        return try await withCheckedThrowingContinuation{continuation in
+            preparation=continuation
             server.stateUpdateHandler={ [weak self] state in
-                guard !answered else{return}
-                if case .ready=state,let port=server.port{answered=true;let uri="http://127.0.0.1:\(port.rawValue)/auth/callback";self?.redirectURI=uri;c.resume(returning:uri)}
-                else if case .failed=state{answered=true;c.resume(throwing:StudyError("无法启动本机授权回调。"))}
+                Task{@MainActor [weak self] in self?.listenerChanged(state,generation:generation)}
             }
-            server.newConnectionHandler={ [weak self] in self?.receive($0,Data()) }
+            server.newConnectionHandler={ [weak self] connection in
+                Task{@MainActor [weak self] in
+                    guard let self=self,self.attempt==generation else{connection.cancel();return}
+                    connection.start(queue:.main);self.receive(connection,Data(),generation:generation)
+                }
+            }
             server.start(queue:.main)
-            DispatchQueue.main.asyncAfter(deadline:.now()+10){if !answered{answered=true;server.cancel();c.resume(throwing:StudyError("无法准备授权连接，请重试。"))}}
+            preparationTimeout=Task{@MainActor [weak self] in
+                do{try await Task.sleep(nanoseconds:10_000_000_000)}catch{return}
+                guard let self=self,self.attempt==generation,self.preparation != nil else{return}
+                self.close("无法准备授权连接，请重试。")
+            }
+        }
+    }
+    private func listenerChanged(_ state:NWListener.State,generation:UUID){
+        guard attempt==generation else{return}
+        switch state{
+        case .ready:
+            guard let port=listener?.port,let continuation=preparation else{return}
+            let uri="http://127.0.0.1:\(port.rawValue)/auth/callback"
+            redirectURI=uri;preparation=nil;preparationTimeout?.cancel();preparationTimeout=nil
+            continuation.resume(returning:uri)
+        case .failed,.cancelled:close("本机授权连接已中断，请重试。")
+        default:break
         }
     }
     func open(_ raw:String)async throws->String{
         guard let url=URL(string:raw),url.scheme=="https",url.host=="auth.openai.com",url.path=="/api/accounts/authorize",let components=URLComponents(url:url,resolvingAgainstBaseURL:false),components.queryItems?.first(where:{$0.name=="redirect_uri"})?.value==redirectURI,listener != nil else{throw StudyError("授权地址校验失败。")}
         guard let root=UIApplication.shared.connectedScenes.compactMap({$0 as? UIWindowScene}).flatMap({$0.windows}).first(where:{$0.isKeyWindow})?.rootViewController else{throw StudyError("暂时无法打开授权页面。")}
-        return try await withCheckedThrowingContinuation{c in
-            pending=c;let controller=SFSafariViewController(url:url);controller.delegate=self;safari=controller
-            var presenter=root;while let presented=presenter.presentedViewController{presenter=presented};presenter.present(controller,animated:true)
-            let item=DispatchWorkItem{ [weak self] in self?.cancel() };timeout=item;DispatchQueue.main.asyncAfter(deadline:.now()+600,execute:item)
+        let generation=attempt
+        return try await withCheckedThrowingContinuation{continuation in
+            pending=continuation
+            let controller=SFSafariViewController(url:url);controller.delegate=self;safari=controller
+            var presenter=root;while let presented=presenter.presentedViewController{presenter=presented}
+            presenter.present(controller,animated:true)
+            timeout=Task{@MainActor [weak self] in
+                do{try await Task.sleep(nanoseconds:600_000_000_000)}catch{return}
+                guard let self=self,self.attempt==generation else{return}
+                self.close("本次授权已超时，请重新登录。")
+            }
         }
     }
-    func receive(_ connection:NWConnection,_ previous:Data){
-        if previous.isEmpty{connection.start(queue:.main)}
+    private func receive(_ connection:NWConnection,_ previous:Data,generation:UUID){
         connection.receive(minimumIncompleteLength:1,maximumLength:16384){ [weak self] data,_,complete,error in
-            guard let self=self else{connection.cancel();return};var bytes=previous;if let data=data{bytes.append(data)}
-            guard bytes.count<=16384 else{connection.cancel();return}
-            guard let request=String(data:bytes,encoding:.utf8),request.contains("\r\n\r\n") else{if !complete && error==nil{self.receive(connection,bytes)}else{connection.cancel()};return}
-            let fields=request.components(separatedBy:"\r\n")[0].split(separator:" ")
-            guard fields.count==3,fields[0]=="GET",fields[1].hasPrefix("/auth/callback?"),let uri=self.redirectURI,self.pending != nil else{connection.cancel();return}
-            let callback=String(uri.dropLast("/auth/callback".count))+String(fields[1])
-            let body="<!doctype html><meta name=viewport content=width=device-width><p>Return to Language Study Coach.</p>"
-            let response="HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
-            connection.send(content:Data(response.utf8),completion:.contentProcessed{_ in connection.cancel()})
-            let c=self.pending;self.pending=nil;self.cancel();c?.resume(returning:callback)
+            Task{@MainActor [weak self] in
+                self?.received(connection,previous:previous,data:data,complete:complete,error:error,generation:generation)
+            }
         }
     }
-    func safariViewControllerDidFinish(_ controller:SFSafariViewController){cancel()}
+    private func received(_ connection:NWConnection,previous:Data,data:Data?,complete:Bool,error:NWError?,generation:UUID){
+        guard generation==attempt else{connection.cancel();return}
+        var bytes=previous;if let data=data{bytes.append(data)}
+        guard bytes.count<=16384 else{connection.cancel();return}
+        guard let request=String(data:bytes,encoding:.utf8),request.contains("\r\n\r\n") else{
+            if !complete && error==nil{receive(connection,bytes,generation:generation)}else{connection.cancel()};return
+        }
+        let fields=request.components(separatedBy:"\r\n")[0].split(separator:" ")
+        guard fields.count==3,fields[0]=="GET",fields[1].hasPrefix("/auth/callback?"),let uri=redirectURI,pending != nil else{connection.cancel();return}
+        let callback=String(uri.dropLast("/auth/callback".count))+String(fields[1])
+        let body="<!doctype html><meta name=viewport content=width=device-width><p>Return to Language Study Coach.</p>"
+        let response="HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
+        connection.send(content:Data(response.utf8),completion:.contentProcessed{_ in connection.cancel()})
+        let continuation=pending;pending=nil;cancel();continuation?.resume(returning:callback)
+    }
+    nonisolated func safariViewControllerDidFinish(_ controller:SFSafariViewController){
+        Task{@MainActor [weak self] in self?.cancel()}
+    }
 }

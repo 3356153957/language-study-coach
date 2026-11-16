@@ -59,28 +59,65 @@ struct PracticeScreen:View {
     var questions:[J]{task["questions"].list.isEmpty ? [.object(["prompt":task["prompt"],"options":task["options"]])]:task["questions"].list}
     var complete:Bool{answers.count==questions.count && answers.allSatisfy{!$0.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty}}
     var body:some View{
-        NavigationStack{ScrollViewReader{proxy in
-            ScrollView{LazyVStack(alignment:.leading,spacing:22){
-                ForEach(session["history"].list,id:\.recordID){entry in historyMessage(entry)}
-                if !session["feedback"].exists{currentQuestion(proxy).disabled(!store.busy.isEmpty)}
-                if !session["feedback"].exists{discussionTurns(task["id"].text)}
-                if !store.busy.isEmpty{HStack{ProgressView();Text(store.busy).font(.subheadline)}.accessibilityIdentifier("practice-busy")}
-                Color.clear.frame(height:1).id("latest")
-            }.padding(18)}.scrollDismissesKeyboard(.interactively).background(StudyStyle.background)
+        lifecycle
+            .sheet(isPresented:$showSummary,onDismiss:summaryDismissed){RoundDetail(round:summary)}
+            .alert("未能完成",isPresented:errorPresented){Button("知道了"){store.error=""}}message:{Text(store.error)}
+    }
+    var lifecycle:some View{
+        NavigationStack{ScrollViewReader{proxy in conversation(proxy)}}
+            .onAppear(perform:restoreDraft)
+            .onChange(of:task.recordID){_ in restoreDraft()}
+            .onReceive(timer){_ in tick()}
+            .onChange(of:coachText){_ in persistDraft()}
+            .onChange(of:coaching){active in if !active{discussionTaskID=task.recordID};persistDraft()}
+            .onChange(of:scenePhase){phase in if phase != .active{saveAndStop()}}
+            .onDisappear(perform:saveAndStop)
+    }
+    func conversation(_ proxy:ScrollViewProxy)->some View{
+        conversationContent(proxy)
             .safeAreaInset(edge:.bottom,spacing:0){composer}
             .navigationTitle(session.exists ? session["goal"].text+" · "+session["mode"].text+"练习":"练习")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar{ToolbarItem(placement:.navigationBarLeading){Button("学习"){dismiss()}};ToolbarItem(placement:.navigationBarTrailing){Button("结束本轮"){finish()}.disabled(!store.busy.isEmpty)}}
-            .toolbar{ToolbarItemGroup(placement:.keyboard){Spacer();Button("收起键盘"){focus=nil;UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),to:nil,from:nil,for:nil)}}}
-            .onChange(of:session["history"].list.count){_ in withAnimation{proxy.scrollTo("latest",anchor:.bottom)}}
-            .onChange(of:session["discussions"][task["id"].text].list.count){_ in withAnimation{proxy.scrollTo("latest",anchor:.bottom)}}
-            .onChange(of:focus){index in if let index=index,index>=0,questions.count>1{withAnimation{proxy.scrollTo("field-\(index)",anchor:.center)}}}
-            .onReceive(NotificationCenter.default.publisher(for:UIResponder.keyboardDidShowNotification)){_ in if let index=focus,index>=0,questions.count>1{withAnimation{proxy.scrollTo("field-\(index)",anchor:.center)}}}
-        }.onAppear{restoreDraft()}.onChange(of:task["id"].text){_ in restoreDraft()}.onReceive(timer){_ in if scenePhase == .active && !session["feedback"].exists && store.busy.isEmpty{seconds=min(1800,seconds+1);if seconds%10==0{persistDraft()}}}
-        .onChange(of:coachText){_ in persistDraft()}.onChange(of:coaching){active in if !active{discussionTaskID=task["id"].text};persistDraft()}.onChange(of:scenePhase){phase in if phase != .active{persistDraft(immediately:true);store.speech.stopSpeaking(at:.immediate)}}
-        .sheet(isPresented:$showSummary,onDismiss:{if !store.current.exists{dismiss()}}){RoundDetail(round:summary)}
-        .alert("未能完成",isPresented:Binding(get:{!store.error.isEmpty},set:{if !$0{store.error=""}})){Button("知道了"){store.error=""}}message:{Text(store.error)}
-        .onDisappear{store.speech.stopSpeaking(at:.immediate);persistDraft(immediately:true)}}
+            .toolbar{navigationControls}
+            .toolbar{keyboardControls}
+            .onChange(of:session["history"].list.count){_ in scrollToLatest(proxy)}
+            .onChange(of:discussionCount){_ in scrollToLatest(proxy)}
+            .onChange(of:focus){_ in scrollToFocusedField(proxy)}
+            .onReceive(NotificationCenter.default.publisher(for:UIResponder.keyboardDidShowNotification)){_ in scrollToFocusedField(proxy)}
+    }
+    func conversationContent(_ proxy:ScrollViewProxy)->some View{
+        ScrollView{
+            LazyVStack(alignment:.leading,spacing:22){
+                ForEach(session["history"].list,id:\.recordID){entry in historyMessage(entry)}
+                if !session["feedback"].exists{
+                    currentQuestion(proxy).disabled(!store.busy.isEmpty)
+                    discussionTurns(task.recordID)
+                }
+                if !store.busy.isEmpty{HStack{ProgressView();Text(store.busy).font(.subheadline)}.accessibilityIdentifier("practice-busy")}
+                Color.clear.frame(height:1).id("latest")
+            }.padding(18)
+        }.scrollDismissesKeyboard(.interactively).background(StudyStyle.background)
+    }
+    @ToolbarContentBuilder var navigationControls:some ToolbarContent{
+        ToolbarItem(placement:.navigationBarLeading){Button("学习"){dismiss()}}
+        ToolbarItem(placement:.navigationBarTrailing){Button("结束本轮",action:finish).disabled(!store.busy.isEmpty)}
+    }
+    @ToolbarContentBuilder var keyboardControls:some ToolbarContent{
+        ToolbarItemGroup(placement:.keyboard){Spacer();Button("收起键盘",action:hideKeyboard)}
+    }
+    var discussionCount:Int{session["discussions"][task.recordID].list.count}
+    var errorPresented:Binding<Bool>{Binding(get:{!store.error.isEmpty},set:{if !$0{store.error=""}})}
+    func scrollToLatest(_ proxy:ScrollViewProxy){withAnimation{proxy.scrollTo("latest",anchor:.bottom)}}
+    func scrollToFocusedField(_ proxy:ScrollViewProxy){
+        if let index=focus,index>=0,questions.count>1{withAnimation{proxy.scrollTo("field-\(index)",anchor:.center)}}
+    }
+    func hideKeyboard(){focus=nil;UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),to:nil,from:nil,for:nil)}
+    func saveAndStop(){store.speech.stopSpeaking(at:.immediate);persistDraft(immediately:true)}
+    func summaryDismissed(){if !store.current.exists{dismiss()}}
+    func tick(){
+        if scenePhase == .active && !session["feedback"].exists && store.busy.isEmpty{
+            seconds=min(1800,seconds+1);if seconds%10==0{persistDraft()}
+        }
     }
     @ViewBuilder func historyMessage(_ entry:J)->some View{
         QuestionMaterial(task:entry["task"],answered:true)
