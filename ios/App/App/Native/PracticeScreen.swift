@@ -135,6 +135,8 @@ struct PracticeScreen:View {
                 if questions.count>1{Text("\(index+1). "+item["prompt"].text).font(.headline)}
                 if !item["options"].list.isEmpty{
                     ForEach(Array(item["options"].list.enumerated()),id:\.offset){option,value in choice(index:index,option:option,value:value.text)}
+                }else if questions.count>1 && verticalSize == .compact{
+                    Button{focus=index}label:{Text(answers.indices.contains(index) && !answers[index].isEmpty ? answers[index]:"填写第 \(index+1) 项回答").frame(maxWidth:.infinity,alignment:.leading).padding(12).background(.background,in:RoundedRectangle(cornerRadius:12))}.buttonStyle(.plain)
                 }else if questions.count>1{
                     AnswerEditor(text:answerBinding(index),active:focus==index,identifier:"answer-\(index)",returnKey:index+1<questions.count ? .next:.send,onFocus:{focus=index},onReturn:{
                         if index+1<questions.count{focus=index+1;withAnimation{proxy.scrollTo("field-\(index+1)",anchor:.center)}}else{submit()}
@@ -164,7 +166,32 @@ struct PracticeScreen:View {
                 .overlay(RoundedRectangle(cornerRadius:14).stroke(StudyStyle.purple.opacity(selected ? 0.7:0.1)))
         }.buttonStyle(.plain).accessibilityIdentifier("option-\(index)-\(option)")
     }
-    var composer:some View{VStack(spacing:10){
+    var compactIndex:Int?{
+        if let index=focus,index>=0,index<questions.count,questions[index]["options"].list.isEmpty{return index}
+        return questions.indices.first{questions[$0]["options"].list.isEmpty}
+    }
+    var composer:some View{
+        Group{
+            if verticalSize == .compact,questions.count>1,!coaching,!session["feedback"].exists,let index=compactIndex{compactComposer(index)}
+            else{standardComposer}
+        }.padding(verticalSize == .compact ? 8:12).background(.regularMaterial).disabled(!store.busy.isEmpty)
+    }
+    func compactComposer(_ index:Int)->some View{
+        VStack(alignment:.leading,spacing:6){
+            HStack(spacing:10){
+                Picker("输入用途",selection:$coaching){Text("作答").tag(false);Text("问教练").tag(true)}.pickerStyle(.segmented).frame(width:150)
+                Button{focus=max(0,index-1)}label:{Image(systemName:"chevron.left")}.disabled(index==0).accessibilityLabel("上一项回答")
+                Text("\(index+1)/\(questions.count)").font(.caption)
+                Button{focus=min(questions.count-1,index+1)}label:{Image(systemName:"chevron.right")}.disabled(index+1==questions.count).accessibilityLabel("下一项回答")
+                Spacer()
+                Button(action:submit){Image(systemName:"arrow.up")}.buttonStyle(.borderedProminent).disabled(!complete).accessibilityIdentifier("send-answer")
+            }
+            Text(questions[index]["prompt"].text).font(.subheadline).lineLimit(2)
+            AnswerEditor(text:answerBinding(index),active:focus==index,identifier:"answer-\(index)",returnKey:index+1<questions.count ? .next:.send,onFocus:{focus=index},onReturn:{if index+1<questions.count{focus=index+1}else{submit()}}).frame(height:54).id("compact-answer-\(index)")
+            if !draftWarning.isEmpty{Text(draftWarning).font(.caption).foregroundStyle(.red)}
+        }
+    }
+    var standardComposer:some View{VStack(spacing:10){
         if !draftWarning.isEmpty{Text(draftWarning).font(.caption).foregroundStyle(.red)}
         if !discussionTaskID.isEmpty && discussionTaskID != task["id"].text{HStack{Text("正在追问之前的题目").font(.caption);Spacer();Button("回到当前题"){discussionTaskID=task["id"].text}}}
         if session["feedback"].exists{Button{Task{if session["history"].list.count>=session["targetCount"].int{finish()}else{await store.perform("正在切换下一题…"){store.state=try await store.request("session/next",["sessionId":session["id"],"taskId":task["id"]]);coaching=false}}}}label:{Label(session["history"].list.count>=session["targetCount"].int ? "生成本轮小结":session["nextReady"].flag ? "下一题已准备好，继续":"继续下一题",systemImage:"arrow.right")}.buttonStyle(.borderedProminent).accessibilityIdentifier("next-task")}
@@ -172,7 +199,7 @@ struct PracticeScreen:View {
         if coaching || session["feedback"].exists{AnswerEditor(text:$coachText,active:focus == -1,identifier:"coach-message",limit:2000,onFocus:{focus = -1},onReturn:{sendCoach()}).frame(height:verticalSize == .compact ? 44:76)}
         else if questions.count==1 && questions[0]["options"].list.isEmpty{AnswerEditor(text:answerBinding(0),active:focus==0,identifier:"answer-0",onFocus:{focus=0},onReturn:{submit()}).frame(height:verticalSize == .compact ? 44:90)}
         HStack{Text(coaching || session["feedback"].exists ? "中文或英文都可以":"可用键盘麦克风听写").font(.caption).foregroundStyle(.secondary);Spacer();Button{if coaching || session["feedback"].exists{sendCoach()}else{submit()}}label:{Image(systemName:"arrow.up").font(.headline).frame(width:40,height:36)}.buttonStyle(.borderedProminent).disabled(!store.busy.isEmpty || (coaching || session["feedback"].exists ? coachText.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty:!complete)).accessibilityIdentifier("send-answer")}
-    }.padding(12).background(.regularMaterial).disabled(!store.busy.isEmpty)}
+    }}
     func answerBinding(_ index:Int)->Binding<String>{Binding(get:{answers.indices.contains(index) ? answers[index]:""},set:{setAnswer(index,$0)})}
     func setAnswer(_ index:Int,_ value:String){if answers.count != questions.count{answers=Array(repeating:"",count:questions.count)};answers[index]=String(value.prefix(4000));persistDraft()}
     func persistDraft(immediately:Bool=false){
