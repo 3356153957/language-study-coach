@@ -16,7 +16,7 @@ final class NativeUITests:XCTestCase {
     }
     func openExam(_ app:XCUIApplication){
         XCTAssertTrue(app.buttons["learning-goal"].waitForExistence(timeout:15))
-        app.buttons["learning-goal"].tap();app.buttons["四级"].tap()
+        app.buttons["learning-goal"].tap();app.buttons["四级"].firstMatch.tap()
         let link=app.buttons["exam-progress"]
         for _ in 0..<6{if link.isHittable{break};app.swipeUp()}
         XCTAssertTrue(link.isHittable);link.tap()
