@@ -61,6 +61,15 @@ macOS：安装 Xcode 26+ 和 XcodeGen 后，运行 `npm run ios:open` 生成并�
 - 修正 XcodeGen 工程输出路径、Info.plist 的版本与 scene 配置；OAuth 网络回调回到 MainActor，并按授权尝试隔离取消/超时；练习视图拆分后通过真实 Swift 编译。
 - `scripts/verify-native-ipa.py` 核验已导出的包，并生成带源码提交、构建地址和 SHA-256 的 `verification.json`。它不代替设备测试或签名检查。
 
+## 2.0.2 两位小数预测（2026-11-16）
+
+- 四级和六级改用 `examEstimate.probability`（0–100），固定显示两位小数；显示与上次有效预测的百分点差值。首份预测不虚构变化，缓存副本不计作上一次预测。
+- 历史 `low/high` 区间保留在来源记录，界面使用中点并说明来源；更新时仍依据真实作答，不为制造波动修改概率。两位小数属于展示精度，尚未用真实考试结果校准。
+- 发布源码 102 项 Node、7 项 XCTest、6 项 XCUITest 通过。[完整验收 #43874856244](https://github.com/huangziqi113-cmd/language-study-coach/actions/runs/43874856244) 使用 Xcode 26.3 和 iPhone 16 Pro / iOS 26.2 模拟器。已查看原生单点、变化和历史中点截图；正式本地网页显示 27.50%，隔离网页验证 12.23% 和 +1.23 个百分点的首页与详情。
+- 源码提交 `5f32064255ee70c544465727d7e6710cf0757d9b`。包 `build/ios-swiftui-v2.0.2/final/LanguageStudyCoach-2.0.2-build10-unsigned.ipa`，952120 字节，SHA-256 `203d252ac82784856dcc96ccdffddf530120771e5f6a2aaba18916da1a0200d6`。
+- 同目录保留包核验、测试报告、9 张模拟器截图和校验文件。原始日志与截图在 `artifacts/decimal-prediction/native/`，网页截图在 `artifacts/decimal-prediction/`。
+- [私有测试发布 v2.0.2](https://github.com/3356153957/language-study-coach/releases/tag/v2.0.2)。IPA 未签名，真机覆盖升级尚未验证；安装前导出备份并沿用兼容签名。
+
 ## 2.0.1 预测恢复修复（2026-11-16）
 
 - 根因：导出和云同步保留了历史学习小结中的 `examEstimate`，但卡片只读未纳入便携格式的顶层缓存；新小结未返回区间时还会清空缓存。
