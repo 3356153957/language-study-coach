@@ -15,5 +15,9 @@ xcrun simctl install "$DEVICE" "$OUT/DerivedData/Build/Products/Debug-iphonesimu
 xcrun simctl launch "$DEVICE" com.languagestudycoach.app
 sleep 10
 xcrun simctl io "$DEVICE" screenshot "$OUT/iphone16pro.png"
-xcodebuild -project ios/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" -resultBundlePath "$OUT/NativeTests.xcresult" test CODE_SIGNING_ALLOWED=NO > "$OUT/tests.log" 2>&1 || { tail -100 "$OUT/tests.log"; exit 1; }
+set +e
+xcodebuild -project ios/App.xcodeproj -scheme App -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath "$OUT/DerivedData" -resultBundlePath "$OUT/NativeTests.xcresult" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 test CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$OUT/tests.log"
+TEST_EXIT=${PIPESTATUS[0]}
+set -e
 xcrun xcresulttool export attachments --path "$OUT/NativeTests.xcresult" --output-path "$OUT/screenshots" || true
+exit "$TEST_EXIT"
