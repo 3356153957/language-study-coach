@@ -61,7 +61,17 @@ macOS：安装 Xcode 26+ 和 XcodeGen 后，运行 `npm run ios:open` 生成并�
 - 修正 XcodeGen 工程输出路径、Info.plist 的版本与 scene 配置；OAuth 网络回调回到 MainActor，并按授权尝试隔离取消/超时；练习视图拆分后通过真实 Swift 编译。
 - `scripts/verify-native-ipa.py` 核验已导出的包，并生成带源码提交、构建地址和 SHA-256 的 `verification.json`。它不代替设备测试或签名检查。
 
-## 交付文件
+## 2.0.1 预测恢复修复（2026-11-16）
+
+- 根因：导出和云同步保留了历史学习小结中的 `examEstimate`，但卡片只读未纳入便携格式的顶层缓存；新小结未返回区间时还会清空缓存。
+- 从对应考试的历史小结中恢复最近一次有效预测，显示生成日期；后续无新区间或最近样本不足时保留历史结果并说明状态，不伪造新的通过率。
+- 手机与网页共用恢复逻辑。分别提示样本不足、等待小结、最近小结未给出估计；无需再次调用 AI 即可恢复已有结果。
+- 97 项 Node 测试、7 项原生 XCTest、5 项原生 UI 测试全部通过。[完整验收 #43864344701](https://github.com/huangziqi113-cmd/language-study-coach/actions/runs/43864344701) 使用 Xcode 26.3 和 iPhone 16 Pro / iOS 26.2 模拟器。已查看预测恢复和无结果提示的原生截图，核验正式本地网页的卡片/详情；不等于已完成真机覆盖升级。
+- 编译源码提交 `145cb86733799c01e8270d3383560c05146f6161`。本地包 `build/ios-swiftui-v2.0.1/final/LanguageStudyCoach-2.0.1-build9-unsigned.ipa`，950536 字节，未签名。
+- SHA-256：`6ae734b901dc5eb3e104560b767b276b21d3357987dd500e3ba65b990fd45366`。同目录有包核验、测试报告、8 张模拟器截图的压缩包和校验文件。日志及截图位于 `artifacts/swiftui-v2/run-43864344701/simulator/`。
+- [私有测试发布 v2.0.1](https://github.com/3356153957/language-study-coach/releases/tag/v2.0.1)。升级前导出备份，并沿用与原安装兼容的签名和 Keychain 权限。
+
+## 2.0.0 历史交付文件
 
 - [私有测试发布 v2.0.0](https://github.com/3356153957/language-study-coach/releases/tag/v2.0.0)。
 - 本地安装包：`build/ios-swiftui-v2/final/LanguageStudyCoach-2.0.0-build8-unsigned.ipa`，946530 字节。
