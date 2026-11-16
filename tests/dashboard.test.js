@@ -13,16 +13,30 @@ const makeEngine = (sessions, overrides = {}) => createEngine({ initialState: { 
   backgrounds: [{ private: 'learner context' }], config: { provider: 'compatible', apiKey: 'test-only' } },
   save: async () => {}, modelCall: async () => ({ ok: true }), ...overrides });
 
-test('web prediction card and detail show the recovered range and date instead of an empty accumulation state', () => {
+test('web prediction card and detail show the recovered midpoint and date instead of an empty accumulation state', () => {
   const initialState=predictionFixture(); delete initialState.examEstimates;
   const data=createEngine({initialState,save:async()=>{}}).view({compact:true});
   const args={data,goal:'四级',esc:String,button:()=>'',date:String};
   for(const html of [renderDashboard(args),renderProfile(args)]){
-    assert.match(html,/30–60%/);assert.match(html,/2026-11-14/);
+    assert.match(html,/45.00%/);assert.match(html,/2026-11-14/);assert.match(html,/历史区间中点/);
   }
   data.examOutlook['六级']={ready:true,progress:100,statusText:'等待学习小结',message:'完成六级学习小结后尝试预测。'};
   const html=renderDashboard({...args,goal:'六级'});
   assert.match(html,/完成六级学习小结/);assert.doesNotMatch(html,/完成四级小结/);
+});
+
+test('web prediction card and detail preserve decimal changes and fill the bar with the point estimate', () => {
+  const initialState=predictionFixture();delete initialState.examEstimates;
+  const older=structuredClone(initialState.sessions.at(-1).report);
+  older.examEstimate={probability:11,reason:'此前依据'};
+  initialState.sessions[3].report=older;initialState.sessions[3].finishedAt='2026-11-13';
+  initialState.sessions[4].report.examEstimate={probability:12.23,reason:'新增依据'};
+  const data=createEngine({initialState,save:async()=>{}}).view({compact:true});
+  const args={data,goal:'四级',esc:String,button:()=>'',date:String};
+  for(const html of [renderDashboard(args),renderProfile(args)]){
+    assert.match(html,/12.23%/);assert.match(html,/较上次 \+1.23 个百分点/);assert.doesNotMatch(html,/undefined|NaN/);
+  }
+  assert.match(renderDashboard(args),/width:12.23%/);
 });
 
 test('activity lists every completed round in bounded pages across goals without answers or active rounds', () => {

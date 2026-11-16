@@ -32,3 +32,17 @@ test('finishing a round without a new estimate retains the old prediction and ex
   assert.equal(engine.view().examOutlook['四级'].estimate.high, 60);
   assert.match(engine.view().examOutlook['四级'].message, /保留上次/);
 });
+
+test('decimal prediction survives report generation, backup, cloud merge and engine restart', async () => {
+  const initialState=predictionFixture(), active=structuredClone(initialState.sessions.at(-1));
+  active.id='decimal-round';active.finishedAt=null;active.report=null;initialState.sessions.push(active);
+  let saved;
+  const engine=createEngine({initialState,save:async value=>{saved=structuredClone(value);},modelCall:async()=>({...initialState.sessions[4].report,examEstimate:{probability:12.23,reason:'新一轮独立作答依据'}})});
+  await engine.execute('/api/session/finish',{sessionId:active.id});
+  const portable=exportBackup(saved);
+  for(const state of [saved,planImport({version:1,sessions:[]},portable).state,mergeCloudRecords({version:1,sessions:[]},recordsFromBackup(portable))]){
+    const value=createEngine({initialState:state,save:async()=>{}}).view().examOutlook['四级'];
+    assert.equal(value.estimate.probabilityText,'12.23%');
+    assert.equal(value.change,-32.77);assert.equal(value.previous.probability,45);
+  }
+});

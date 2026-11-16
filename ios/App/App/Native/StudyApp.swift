@@ -126,9 +126,11 @@ struct ExamPanel:View {
             HStack{Label(goal+"通过率",systemImage:"target").font(.headline);Spacer();Image(systemName:"chevron.right").foregroundStyle(.secondary)}
             if value["estimate"].exists{
                 Text("最近一次预测").font(.subheadline)
-                Text("\(value["estimate"]["low"].int)–\(value["estimate"]["high"].int)%").font(.title2.bold()).accessibilityIdentifier("exam-estimate")
+                Text(value["estimate"]["probabilityText"].text).font(.title2.bold()).monospacedDigit().accessibilityIdentifier("exam-estimate")
+                if !value["changeText"].text.isEmpty{Text(value["changeText"].text).font(.subheadline).accessibilityIdentifier("exam-change")}
                 Text(value["estimate"]["updatedAt"].text.isEmpty ? "历史预测 · 生成日期未记录":"生成于 "+String(value["estimate"]["updatedAt"].text.prefix(10))).font(.caption).foregroundStyle(.secondary)
                 Text(value["estimate"]["reason"].text).font(.caption).foregroundStyle(.secondary)
+                if !value["estimate"]["sourceNote"].text.isEmpty{Text(value["estimate"]["sourceNote"].text).font(.caption).foregroundStyle(.secondary)}
             }else{
                 Text(value["statusText"].text).font(.subheadline).accessibilityIdentifier("exam-status")
                 ProgressView(value:Double(value["progress"].int),total:100).tint(StudyStyle.purple)

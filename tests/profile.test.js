@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sharedProfile, examOutlook } from '../server/profile.js';
-import { validateTask, validateReport } from '../server/coach.js';
+import { validateTask, validateReport, validateExamEstimate, prompts } from '../server/coach.js';
 
 test('legacy profiles merge into one latest profile without losing previously assessed skills', () => {
   const state = { profiles: { 四级: { level: 'A2', updatedAt: '2026-11-10', skills: [{ name: '听力', level: 'A2', evidence: '听力证据' }] }, 初中英语: { level: 'B1', updatedAt: '2026-11-11', skills: [{ name: '听力', level: '未测评', evidence: '' }, { name: '阅读', level: 'B1', evidence: '阅读证据' }] } } };
@@ -60,12 +60,52 @@ test('eligible samples distinguish waiting for a summary from a summary without 
   assert.match(examOutlook(state)['六级'].message, /六级.*小结/);
   round.finishedAt = '2026-11-16'; round.report = { examEstimate: null };
   assert.equal(examOutlook(state)['六级'].status, 'no_estimate');
-  assert.match(examOutlook(state)['六级'].message, /未给出有效区间/);
+  assert.match(examOutlook(state)['六级'].message, /未给出有效预测/);
   assert.equal(examOutlook(state)['四级'].status, 'collecting');
 });
 
-test('malformed or overly precise probability estimates do not discard a valid learning report', () => {
+test('malformed estimates do not discard a valid learning report and legacy ranges remain portable', () => {
   const report = { level: 'A2', summary: '学习观察', nextFocus: '继续练习', skills: ['阅读', '听力', '词汇', '语法', '表达'].map(name => ({ name, level: 'A2', evidence: '样例' })) };
   for (const e of [{ low: -1, high: 50, reason: '错误' }, { low: 40, high: 41, reason: '过窄' }, { low: '30', high: 60, reason: '错误' }]) assert.equal(validateReport({ ...report, examEstimate: e }).examEstimate, null);
   assert.deepEqual(validateReport({ ...report, examEstimate: { low: 30, high: 60, reason: '样例证据' } }).examEstimate, { low: 30, high: 60, reason: '样例证据' });
+});
+
+test('point predictions accept decimals, normalize precision and reject invalid percentages', () => {
+  for (const probability of [0, 0.23, 12.23, 100]) assert.equal(validateExamEstimate({ probability, reason: '依据' }).probability, probability);
+  assert.equal(validateExamEstimate({ probability: 12.235, reason: '依据' }).probability, 12.24);
+  for (const probability of [-0.01, 100.01, NaN, Infinity, '12.23', null, undefined]) {
+    assert.equal(validateExamEstimate({ probability, low: 30, high: 60, reason: '依据' }), null);
+  }
+  assert.equal(validateExamEstimate({ probability: 12.23, reason: ' ' }), null);
+  assert.match(prompts.report, /probability.*两位小数/);
+  assert.doesNotMatch(prompts.report, /区间至少宽20/);
+});
+
+test('outlook shows two decimals and compares separate reports without counting the cache twice', () => {
+  const round = (id, date, estimate, goal = '四级') => ({ id, goal, finishedAt: date, history: [], report: { examEstimate: estimate } });
+  const old = { probability: 11, reason: '上次依据' }, latest = { probability: 12.23, reason: '新增依据' };
+  const state = { sessions: [round('old', '2026-11-13', old), round('new', '2026-11-14', latest), round('six', '2026-11-15', { probability: 90, reason: '六级' }, '六级')],
+    examEstimates: { 四级: { ...latest, updatedAt: '2026-11-13T23:59:59.999Z' } } };
+  const before = structuredClone(state), value = examOutlook(state)['四级'];
+  assert.equal(value.estimate.probabilityText, '12.23%');
+  assert.equal(value.previous.probability, 11);
+  assert.equal(value.change, 1.23); assert.equal(value.changeText, '较上次 +1.23 个百分点');
+  assert.deepEqual(state, before);
+  state.sessions.push(round('empty', '2026-11-16', null));
+  assert.equal(examOutlook(state)['四级'].change, 1.23);
+  state.sessions.push(round('flat', '2026-11-17', latest));
+  assert.equal(examOutlook(state)['四级'].changeText, '较上次持平');
+  state.sessions.push(round('drop', '2026-11-18', { probability: 10, reason: '新表现' }));
+  assert.equal(examOutlook(state)['四级'].changeText, '较上次 −2.23 个百分点');
+});
+
+test('legacy range displays its midpoint without mutating history or fabricating a comparison', () => {
+  const estimate = { low: 15, high: 40, reason: '历史依据' };
+  const state = { sessions: [{ goal: '四级', finishedAt: '2026-11-14T00:00:00.005Z', history: [], report: { examEstimate: estimate } }],
+    examEstimates: { 四级: { ...estimate, updatedAt: '2026-11-14' } } };
+  const value = examOutlook(state)['四级'];
+  assert.equal(value.estimate.probabilityText, '27.50%');
+  assert.match(value.estimate.sourceNote, /历史区间中点/);
+  assert.equal(value.change, null); assert.equal(value.changeText, '');
+  assert.deepEqual(estimate, { low: 15, high: 40, reason: '历史依据' });
 });

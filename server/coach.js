@@ -27,7 +27,7 @@ suggestion 必须是对用户 answer 原句的润色：保留用户的意思、�
 };
 
 prompts.next += `\n写作模式 kind=text、skill=表达，根据水平安排造句、情景表达、短段落或作文，保持上下文并针对原句润色。阅读模式 skill=阅读、kind=choice或text，必须包含完整英文 passage，只考察阅读理解，不单独出语法填空或写作题。旧版对话、题卡会话仍按原模式继续。`;
-prompts.report += `\n画像综合所有目标的记录；本轮未测的能力保留已有判断与证据，不因切换目标降级、重置或标为未测评。可额外返回 examEstimate。只有 goal 为四级或六级、examEvidence.ready=true 且证据足够相关时，examEstimate 必须为 {"low":0至100整数,"high":0至100整数,"reason":"具体依据、样本局限和待补能力"}，表示当前目标达到用户常用425分备考目标的主观概率区间；区间至少宽20个百分点，不能将正确率或CEFR直接换算通过率，必须考虑材料难度、辅助使用、题型覆盖和样本新旧。这不是经考试结果校准的统计概率。材料难度明显不匹配、缺乏考试要求的写作翻译或其他关键证据时才返回 null。非四六级或 examEvidence.ready=false 时必须为 null。`;
+prompts.report += `\n画像综合所有目标的记录；本轮未测的能力保留已有判断与证据，不因切换目标降级、重置或标为未测评。可额外返回 examEstimate。只有 goal 为四级或六级、examEvidence.ready=true 且证据足够相关时，examEstimate 必须为 {"probability":0至100的数值、最多两位小数,"reason":"具体依据、样本局限和待补能力"}，表示当前目标达到用户常用425分备考目标的主观通过概率点估计，例如12.23表示12.23%。不要返回low/high区间。不能将正确率或CEFR直接换算通过率，必须考虑材料难度、辅助使用、题型覆盖和样本新旧。两位小数用于展示变化，不代表经过考试结果校准的精度；证据没有明显变化时允许估计不变，不为制造上涨或波动而改动数值。材料难度明显不匹配、缺乏考试要求的写作翻译或其他关键证据时才返回 null。非四六级或 examEvidence.ready=false 时必须为 null。`;
 
 prompts.gradeAndNext = prompts.grade + `\n本次同时准备下一题。先判断当前回答，再根据这个批改结果、当前暴露的薄弱点和 history 中的记录选择下一题。history 尚未包含当前 task、answer、telemetry，生成下一题时必须把它们也作为最新证据；不得重复当前 task 或历史题目。` + prompts.next.slice(base.length) + `\n最终只返回一个对象 {"feedback":上述批改对象,"nextTask":上述新题对象}。feedback.suggestion 只润色用户当前 answer，与 nextTask.answer（新题参考答案）分开；不返回 Markdown 或其他内容。`;
 
@@ -106,6 +106,12 @@ export function validateFeedback(data, task, answer) {
 }
 
 export function validateExamEstimate(e) {
+  if (!e || typeof e.reason !== 'string' || !e.reason.trim() || e.reason.length > 1500) return null;
+  if (Object.hasOwn(e, 'probability')) {
+    return typeof e.probability === 'number' && Number.isFinite(e.probability) && e.probability >= 0 && e.probability <= 100
+      ? { probability: Math.round((e.probability + Number.EPSILON) * 100) / 100, reason: e.reason.trim() } : null;
+  }
+  // Preserve legacy source ranges in backups; the outlook presents their midpoint.
   return e && Number.isInteger(e.low) && Number.isInteger(e.high) && e.low >= 0 && e.high <= 100 && e.high - e.low >= 20 && typeof e.reason === 'string' && e.reason.trim() && e.reason.length <= 1500 ? { low: e.low, high: e.high, reason: e.reason.trim() } : null;
 }
 

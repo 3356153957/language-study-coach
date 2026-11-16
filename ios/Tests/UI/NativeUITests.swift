@@ -1,7 +1,7 @@
 import XCTest
 
 final class NativeUITests:XCTestCase {
-    func launchExamFixture(withEstimate:Bool)->XCUIApplication{
+    func launchExamFixture(withEstimate:Bool,withDecimalChange:Bool=false)->XCUIApplication{
         let file=Bundle(for:Self.self).url(forResource:"exam-backup",withExtension:"json")!
         let backup=try! JSONSerialization.jsonObject(with:Data(contentsOf:file)) as! [String:Any]
         var state=backup["data"] as! [String:Any];state["version"]=1
@@ -9,6 +9,16 @@ final class NativeUITests:XCTestCase {
             var sessions=state["sessions"] as! [[String:Any]]
             var report=sessions[sessions.count-1]["report"] as! [String:Any];report["examEstimate"]=NSNull()
             sessions[sessions.count-1]["report"]=report;state["sessions"]=sessions
+        }
+        if withDecimalChange{
+            var sessions=state["sessions"] as! [[String:Any]]
+            var older=sessions[sessions.count-1]["report"] as! [String:Any]
+            older["examEstimate"]=["probability":11,"reason":"此前的练习依据"]
+            older["updatedAt"]="2026-11-13T10:00:00.000Z"
+            sessions[sessions.count-2]["report"]=older;sessions[sessions.count-2]["finishedAt"]="2026-11-13T10:00:00.000Z"
+            var latest=sessions[sessions.count-1]["report"] as! [String:Any]
+            latest["examEstimate"]=["probability":12.23,"reason":"新增作答后的初步估计"]
+            sessions[sessions.count-1]["report"]=latest;state["sessions"]=sessions
         }
         let app=XCUIApplication();app.launchArguments=["--ui-testing"]
         app.launchEnvironment["LSC_UI_TEST_STATE"]=String(data:try! JSONSerialization.data(withJSONObject:state),encoding:.utf8)!
@@ -24,9 +34,16 @@ final class NativeUITests:XCTestCase {
     func testImportedPredictionIsVisibleWithoutCache(){
         let app=launchExamFixture(withEstimate:true);openExam(app)
         let estimate=app.staticTexts["exam-estimate"]
-        XCTAssertTrue(estimate.waitForExistence(timeout:10));XCTAssertEqual(estimate.label,"30–60%")
+        XCTAssertTrue(estimate.waitForExistence(timeout:10));XCTAssertEqual(estimate.label,"45.00%")
         XCTAssertTrue(app.staticTexts["生成于 2026-11-14"].exists)
         capture(app,"07-native-restored-prediction")
+    }
+    func testDecimalPredictionShowsChangeFromPreviousReport(){
+        let app=launchExamFixture(withEstimate:true,withDecimalChange:true);openExam(app)
+        let estimate=app.staticTexts["exam-estimate"]
+        XCTAssertTrue(estimate.waitForExistence(timeout:10));XCTAssertEqual(estimate.label,"12.23%")
+        XCTAssertEqual(app.staticTexts["exam-change"].label,"较上次 +1.23 个百分点")
+        capture(app,"09-native-decimal-prediction")
     }
     func testEligibleSamplesWithoutEstimateExplainNextStep(){
         let app=launchExamFixture(withEstimate:false);openExam(app)
