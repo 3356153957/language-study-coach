@@ -40,7 +40,7 @@ struct SettingsScreen:View {
             backupSection
             Section("云端同步"){syncFields}
             Section("应用更新"){
-                LabeledContent("当前版本",value:"2.0.0 · SwiftUI")
+                LabeledContent("当前版本",value:appVersion+" · SwiftUI")
                 Button("从 GitHub 检查更新"){Task{await checkUpdate()}}
                 if !updateNotice.isEmpty{Text(updateNotice).font(.caption).foregroundStyle(.secondary)}
                 Link("打开私有发布页",destination:URL(string:"https://github.com/3356153957/language-study-coach/releases")!)
@@ -72,6 +72,7 @@ struct SettingsScreen:View {
                 Text("包含练习、追问和能力画像。API 密钥与 AI 授权留在各自设备。").font(.caption).foregroundStyle(.secondary)
             }}
     var configuration:[String:J]{["provider":.s(provider),"baseURL":.s(baseURL),"model":.s(model),"apiKey":.s(apiKey)]}
+    var appVersion:String{(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "未知"}
     var apiFields:some View{Group{
         TextField("API 基础地址",text:$baseURL).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).onChange(of:baseURL){_ in apiKey="";models=[]}
         SecureField(store.state["config"]["hasKey"].flag && provider==store.state["config"]["provider"].text ? "API Key（留空使用已保存密钥）":"API Key",text:$apiKey).textInputAutocapitalization(.never).autocorrectionDisabled()

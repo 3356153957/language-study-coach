@@ -3,6 +3,13 @@ import CryptoKit
 @testable import App
 
 @MainActor final class NativeTests:XCTestCase {
+    func testLoopbackAuthorizationPreparationCanCloseAndRestart()async throws{
+        let auth=StudyAuthorization();defer{auth.cancel()}
+        let first=try await auth.prepare()
+        XCTAssertEqual(URL(string:first)?.host,"127.0.0.1");XCTAssertEqual(URL(string:first)?.path,"/auth/callback")
+        auth.cancel()
+        let again=try await auth.prepare();XCTAssertNotNil(URL(string:again)?.port)
+    }
     func testJSONPresentationIsStableAndOversizedNumbersDoNotTrap()throws{
         let first=try J.decode(Data("{\"z\":1,\"a\":2}".utf8)),second=try J.decode(Data("{\"a\":2,\"z\":1}".utf8))
         XCTAssertEqual(first.json,second.json)
