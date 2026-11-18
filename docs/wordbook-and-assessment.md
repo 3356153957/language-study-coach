@@ -18,3 +18,9 @@
 - SwiftUI 源码版本 2.0.4（build 12）已同步，原生编译与 IPA 交付单独记录。
 
 网页截图和测试日志保存在本地 `output/`，不纳入发布源码。
+
+## 发布状态
+
+- 源码提交 `79794dd9ffb4fecde6464ddb0730025bf1cb1bfc` 已推送到私有主仓库。
+- [Windows Desktop 1.0.2](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.2-desktop) 已发布安装程序和 SHA-256 清单，附件校验值与本地文件一致。
+- [iOS 编译 #44307817745](https://github.com/huangziqi113-cmd/language-study-coach/actions/runs/44307817745) 因 GitHub 未能分配 macOS 托管构建机而失败；任务没有执行任何编译步骤。本次没有生成新版 IPA，也没有进行原生模拟器或真机验收。
