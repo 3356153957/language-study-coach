@@ -24,3 +24,6 @@
 - 源码提交 `79794dd9ffb4fecde6464ddb0730025bf1cb1bfc` 已推送到私有主仓库。
 - [Windows Desktop 1.0.2](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.2-desktop) 已发布安装程序和 SHA-256 清单，附件校验值与本地文件一致。
 - [iOS 编译 #44307817745](https://github.com/huangziqi113-cmd/language-study-coach/actions/runs/44307817745) 因 GitHub 未能分配 macOS 托管构建机而失败；任务没有执行任何编译步骤。本次没有生成新版 IPA，也没有进行原生模拟器或真机验收。
+- 后续增加可选 Intel 构建机，并补充中文单词本展示、中文搜索、点击触发评估和便携记录的原生验收用例。新增 Swift 文件改动通过本地语法解析，这些原生用例尚未运行。
+- Intel 重试：[备用账号 #44315031526](https://github.com/huangziqi113-cmd/language-study-coach/actions/runs/44315031526) 与 [主账号 #44315424679](https://github.com/3356153957/language-study-coach/actions/runs/44315424679) 都在执行任何步骤前失败。两次均返回账号近期付款失败或需提高消费限额的 GitHub 提示；无法由现有证据判断具体属于哪一种情况。没有生成 2.0.4 IPA。
+- 恢复构建后从 `ios.yml` 选择 `macos-15-intel`、`simulator=true`、`signed=false`，完成原生编译、模拟器验收和 IPA 核验后再交付。当前源码提交 `131f7e6e37f9de8b57d8d2c493afd7423a289ae3`。
