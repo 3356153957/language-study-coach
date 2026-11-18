@@ -1,8 +1,9 @@
 {
   "name": "language-study-coach",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "desktop/main.mjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,11 +12,16 @@
     "evaluate:coach": "node scripts/evaluate-coach-fixture.js",
     "verify:codex": "node scripts/verify-codex.js",
     "ios:sync": "node scripts/build-native-ios.mjs",
-    "ios:open": "node scripts/open-native-ios.mjs"
+    "ios:open": "node scripts/open-native-ios.mjs",
+    "desktop:dev": "npm run build && electron desktop/main.mjs",
+    "desktop:pack": "npm run build && electron-builder --dir --win",
+    "desktop:build": "npm run build && electron-builder --win nsis portable"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",
     "@electric-sql/pglite": "^0.5.16",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
     "vite": "^7.1.12"
   },
   "dependencies": {
@@ -23,5 +29,33 @@
     "@capacitor/ios": "^8.6.2",
     "@supabase/supabase-js": "2.119.0",
     "jose": "^6.2.17"
+  },
+  "build": {
+    "appId": "com.languagestudycoach.desktop",
+    "productName": "Language Study Coach",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "build/desktop"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "LanguageStudyCoach-Desktop-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Language Study Coach"
+    }
   }
 }
