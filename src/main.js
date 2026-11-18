@@ -1,3 +1,7 @@
+import { questionAnswers, updateQuestionAnswer } from './answer-input.js';
+import { roundCounts } from '../server/answer-results.js';
+import { renderAnswerReview } from './answer-review.js';
+import { createDraftStore } from './draft-store.js';
 
 import './style.css';
 import './dashboard.css';
@@ -9,7 +13,7 @@ const native = Capacitor.isNativePlatform();
 document.documentElement.classList.toggle('native-app', native);
 if (native) document.querySelector('meta[name="viewport"]').content += ', maximum-scale=1.0, user-scalable=no';
 const defaultProvider = native ? 'openai' : 'codex';
-const captchaSiteKey = import.meta.env?.VITE_TURNSTILE_SITE_KEY || '';
+let captchaSiteKey = import.meta.env?.VITE_TURNSTILE_SITE_KEY || '';
 let nativeClient;
 
 import { icon, skillIcon, modeName } from './icons.js';
@@ -28,6 +32,7 @@ let data = null, goal = localStorage.getItem('lsc-goal-v1') || '';
 let screen = goal ? 'home' : 'welcome';
 let busy = '', error = '', notice = '', settingsDraft = null, summaryId = null, draft = {};
 let detailSession = null, reviewData = null, reviewOffset = 0;
+let reviewFilter = 'all';
 let activityData = null, practiceMode = '听力';
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
@@ -38,21 +43,49 @@ let syncError='';
 let captchaToken='',captchaScriptPromise=null;
 let updateState={status:'idle',error:'',data:null};
 const syncFields={email:'',code:''};
-let planWelcome = false;
+let planWelcome = false, demoAnswer = '';
 let codexStatus = null, codexLoading = false, codexError = '', codexPolling = null;
 const emptyCatalog = () => ({models:null,loading:false,error:'',query:'',manual:false,truncated:false});
 let modelCatalog = emptyCatalog(), modelGeneration = 0, modelTimer;
 try { draft = JSON.parse(sessionStorage.getItem('lsc-answer-v1') || '{}'); } catch { /* Replace invalid tab draft. */ }
+const draftStore=createDraftStore(localStorage);
+if(draft.taskId){const saved=draftStore.read(draft.taskId);if(saved?.savedAt>(draft.savedAt || 0))draft=saved;}
+let draftWarning='';
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
 const current = () => data?.sessions.find(x => !x.finishedAt);
-const persistDraft = () => sessionStorage.setItem('lsc-answer-v1', JSON.stringify(draft));
+function draftStatusHTML(){
+  const variants=draftStore.conflicts(draft.taskId);
+  return `${esc(draftWarning)}${draftStore.lastResult.kind==='conflict' ? `<div>${button('采用已保存版本','draft-use-saved','secondary-button')}${button('保存当前版本','draft-keep-mine','secondary-button')}</div>`:''}${variants.length ? `<details><summary>查看其他版本草稿（${variants.length}）</summary>${variants.map((value,index)=>`<div><pre>${esc(value.answer)}</pre>${value.coachMessage ? `<p>${esc(value.coachMessage)}</p>`:''}${button('恢复这个版本','draft-restore-version','secondary-button',`data-index="${index}"`)}</div>`).join('')}</details>`:''}`;
+}
+function paintDraftStatus(){
+  const status=app.querySelector('#draft-save-status');
+  if(status){status.innerHTML=draftStatusHTML();status.style.display=draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'none';}
+}
+const persistDraft = (force=false) => {
+  if(current()?.current?.id===draft.taskId)draft.questionCount=taskQuestions(current().current).length;
+  const saved=draftStore.write(draft,{force});
+  if(saved && draftStore.lastResult.draft){
+    Object.assign(draft,draftStore.lastResult.draft);
+    let values;try{values=JSON.parse(draft.answer);}catch{values=[];}
+    for(const field of app.querySelectorAll('.task-text-answer')){const value=values?.[Number(field.dataset.questionIndex)] || '';if(field.value!==value)field.value=value;}
+    for(const [id,key] of [['answer-text','answer'],['coach-message','coachMessage']]){const field=app.querySelector('#'+id);if(field && field.value!==(draft[key] || ''))field.value=draft[key] || '';}
+  }
+  let tabSaved=true;try{sessionStorage.setItem('lsc-answer-v1',JSON.stringify(draft));}catch{tabSaved=false;}
+  draftWarning=draftStore.lastResult.kind==='conflict' ? '另一标签页也修改了同一处。两个版本都已保留，请选择要继续的版本。' : saved ? draftStore.lastResult.kind==='merged' ? '已合并另一标签页在其他答题格的修改。' : '' : tabSaved ? '草稿目前仅保留在此标签页，关闭前请提交或结束本轮。' : '草稿暂未写入浏览器，请保留当前页面并先复制你的回答。';
+  paintDraftStatus();
+};
 const taskQuestions = task => task?.questions?.length ? task.questions : [{ prompt: task?.prompt || '', options: task?.options || [], answer: task?.answer || '' }];
+function clearSkip(index){
+  draft.skippedQuestions=(draft.skippedQuestions || []).filter(i=>i!==index);
+  const control=app.querySelector(`[data-action="skip-question"][data-question-index="${index}"]`);
+  if(control){control.textContent=taskQuestions(current()?.current).length>1 ? '这问不会':'这题不会';control.setAttribute('aria-pressed','false');control.parentElement.querySelector('.skip-note')?.remove();}
+}
 function answerComplete(task, value) {
   const items = taskQuestions(task);
-  if (items.length === 1) return !!String(value || '').trim();
+  if (items.length === 1) return !!String(value || '').trim() || !!draft.skippedQuestions?.includes(0);
   try {
     const values = JSON.parse(value || '[]');
-    return Array.isArray(values) && values.length === items.length && values.every((answer, i) => typeof answer === 'string' && !!answer.trim() && (!items[i].options.length || items[i].options.includes(answer)));
+    return Array.isArray(values) && values.length === items.length && values.every((answer, i) => typeof answer === 'string' && (draft.skippedQuestions?.includes(i) || !!answer.trim() && (!items[i].options.length || items[i].options.includes(answer))));
   } catch { return false; }
 }
 const listeningPlayer = createListeningPlayer({
@@ -64,7 +97,10 @@ const listeningPlayer = createListeningPlayer({
 function syncDraft() {
   const task = current()?.current;
   if (task && task.id !== draft.taskId) {
-    draft = { taskId: task.id, answer: '', activeSeconds: 0, hintUsed: false, replays: 0, transcriptViewed: false, coachMessage: '', composerMode: 'answer', discussTaskId: task.id };
+    draftStore.remove(draft.taskId);
+    const restored=draftStore.read(task.id);
+    draft = restored || { taskId: task.id, answer: '', activeSeconds: 0, hintUsed: false, replays: 0, transcriptViewed: false, coachMessage: '', composerMode: 'answer', discussTaskId: task.id };
+    if(restored && !current().feedback)notice='已恢复这道题的本机草稿，尚未提交。';
     chatScrollToEnd = true;
     if (current().feedback) {
       const saved = current().history.at(-1);
@@ -74,7 +110,7 @@ function syncDraft() {
   }
 }
 const button = (label, action, cls = 'primary-button', attrs = '') => `<button type="button" class="${cls}" data-action="${action}" ${busy ? 'disabled' : ''} ${attrs}>${label}</button>`;
-const duration = sec => sec < 60 ? `${sec} 秒` : `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`;
+const duration = value => { const sec=Math.max(0,Math.round(Number(value) || 0)); return sec < 60 ? `${sec} 秒` : `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`; };
 const levelLabel = value => String(value || '待积累').replace(/\b(A1|A2|B1|B2|C1|C2)\b/, code => code + ' · ' + ({ A1: '入门', A2: '基础交流', B1: '中级', B2: '中高级', C1: '高级', C2: '精通' })[code]);
 const date = value => new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 async function api(path, body) {
@@ -160,7 +196,7 @@ function paintSync() {
   if(panel && !panel.contains(document.activeElement) && !busy) panel.outerHTML=syncPanel();
 }
 async function refreshSync() {
-  try {syncStatus=await request('sync/status');paintSync();} catch(e) {if(screen==='settings'){error=e.message;render();}}
+  try {syncStatus=await request('sync/status');if(!captchaSiteKey && syncStatus.turnstileSiteKey) captchaSiteKey=syncStatus.turnstileSiteKey;paintSync();} catch(e) {if(screen==='settings'){error=e.message;render();}}
 }
 function ensureCaptchaWidget() {
   if (!captchaSiteKey || screen !== 'settings') return;
@@ -238,7 +274,7 @@ function navigate(target) {
   if (target === 'review') {
     reviewOffset = 0; reviewData = null;
     window.scrollTo({ top: 0, behavior: 'instant' });
-    return run('正在读取错题…', async () => { reviewData = await request(`review?goal=${encodeURIComponent(goal)}&offset=0`); });
+    return run('正在读取错题…', async () => { reviewData = await request(`review?goal=${encodeURIComponent(goal)}&offset=0&filter=${reviewFilter}`); });
   }
   if (target === 'profile') {
     return run('正在读取能力详情…', async () => { const profile = await request('profile'); data = { ...data, ...profile }; });
@@ -264,6 +300,7 @@ function render() {
     </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
+      ${screen==='session' && !current()?.feedback ? `<div id="draft-save-status" class="alert error" role="alert" style="${draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'display:none'}">${draftStatusHTML()}</div>` : ''}
       ${busy && screen !== 'session' && screen !== 'starting' ? `<div class="busy-banner" role="status"><span class="spinner"></span>${esc(busy)}</div>` : ''}
       ${!data ? `<div class="empty-state"><h2>正在读取学习记录</h2><p>${native ? '学习记录保存在这台手机。' : '学习记录保存在这台电脑。'}</p>${button('重新连接', 'reload')}</div>` : page()}
     </main>${planWelcome?`<dialog class="plan-welcome" aria-modal="true" aria-label="你正在使用 ChatGPT 订阅"><h2>你正在使用 ChatGPT 订阅</h2><p>本应用中符合条件的出题、批改和追问会使用你的订阅额度。你可以在 ChatGPT 用量设置中管理限额或断开授权。</p>${button('知道了','plan-notice-close')}</dialog>`:''}</div>`;
@@ -280,7 +317,7 @@ function render() {
 }
 function page() {
   if (screen === 'settings') return settings();
-  if (screen === 'profile') return renderProfile({ data, esc, button });
+  if (screen === 'profile') return renderProfile({ data, goal, esc, button });
   if (screen === 'activity' || screen === 'week') return renderActivity({ data, activity: activityData, week: screen === 'week', esc, button, date, duration });
   if (screen === 'practice') return renderPractice({ data, goal, mode: practiceMode, esc, button });
   if (screen === 'welcome' || !goal) return welcome();
@@ -294,7 +331,7 @@ function welcome() {
   return `<section class="welcome-page"><div class="welcome-copy"><span class="eyebrow">YOUR OWN ENGLISH COACH</span><h1>从你的起点，<br>学到<em>用得出来。</em></h1><p>选一个适合你的学习目标。直接从日常练习开始，让 AI 根据每次回答了解你，逐步安排下一步。</p><div class="welcome-note"><span class="spark">✦</span>不用研究学习路线，先从一道题开始。</div></div>
     <div class="preset-panel"><div class="panel-heading">你想从哪里开始？<span class="muted">随时可以更换</span></div><div class="preset-grid">${presets.map(([name, value, tag, detail, color, icon]) => `<button class="preset-card ${color}" data-action="goal" data-value="${value}" ${busy ? 'disabled' : ''}><span class="card-arrow">↗</span><span class="preset-icon">${icon}</span><span class="preset-text"><span class="preset-eyebrow">${tag}</span><strong>${name}</strong><span>${detail}</span></span></button>`).join('')}</div><div class="panel-footer">四个学习目标 · 一个会逐步了解你的教练</div></div></section>`;
 }
-function home() { return renderDashboard({ data, goal, esc, button, date }); }
+function home() { return renderDashboard({ data, goal, esc, button, date, demoAnswer }); }
 function settings() {
   const cfg = settingsDraft || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '', apiKey: '' };
   return `<section class="settings-page"><span class="eyebrow">MAKE IT YOURS</span><h1>连接你的 <em>AI。</em></h1><p class="lead">选择模型，把它变成了解你的英语教练。</p><div class="settings-grid"><form id="settings-form" class="card-surface settings-form">
@@ -323,17 +360,22 @@ function sessionPage() {
 function summaryPage() {
   const s = detailSession;
   if (!s) return '<div class="empty-state">正在读取练习记录…</div>';
-  const report = s.report;
-  return `<section class="summary-page"><span class="summary-icon">✓</span><span class="eyebrow">ONE STEP FURTHER</span><h1>这一轮，<em>有所收获。</em></h1><p>${esc(report?.summary || '本轮没有提交答案，未生成能力判断。')}</p><div class="summary-grid"><div><span>完成</span><strong>${s.history.length}<small> 题</small></strong></div><div><span>回答正确</span><strong>${s.history.filter(x => x.feedback.correct).length}<small> 题</small></strong></div><div><span>有效作答</span><strong class="summary-time">${duration(s.history.reduce((n, x) => n + x.activeSeconds, 0))}</strong></div></div>${report ? `<div class="summary-focus"><span class="spark">✦</span><div><strong>下一步，试试这个方向</strong><p>${esc(report.nextFocus)}</p></div></div><p class="fine-print">AI 初步判断：${esc(report.level)} · 仅根据已有作答，不代表正式考试成绩。</p>` : ''}${roundReview(s)}<div class="form-actions">${button('回到学习页', 'home')}${button('回顾错题', 'review', 'secondary-button')}</div></section>`;
+  const report = s.report, score = roundCounts(s.history);
+  const warning = s.reportError ? `<div class="summary-warning" role="alert"><strong>本轮作答已保存。</strong><p>${esc(s.reportError)}</p></div>` : '';
+  return `<section class="summary-page"><span class="summary-icon">✓</span><span class="eyebrow">ONE STEP FURTHER</span><h1>这一轮，<em>有所收获。</em></h1><p>${esc(report?.summary || (s.history.length ? '本轮作答已保存，学习小结暂未生成。' : '本轮没有提交答案。'))}</p>${warning}${!report && s.finishedAt && s.history.length ? `<div class="form-actions">${button('补生成本轮小结','recover-report','secondary-button',`data-id="${esc(s.id)}"`)}<p class="field-help">只使用本轮结束时已有的作答；不会重新判分或增加学习时长。</p></div>` : ''}${report?.generatedAt ? `<p class="fine-print">根据 ${esc(new Date(s.finishedAt).toLocaleDateString('zh-CN'))} 本轮记录补生成。保留的是当时的表现，不表示今天的能力变化。</p>` : ''}<div class="summary-grid"><div><span>完成</span><strong>${score.count}<small> 题</small></strong></div><div><span>回答正确</span><strong>${score.correct}<small> 题</small></strong></div><div><span>有效作答</span><strong class="summary-time">${duration(s.history.reduce((n, x) => n + (x.activeSeconds || 0), 0))}</strong></div></div>${report ? `<div class="summary-focus"><span class="spark">✦</span><div><strong>下一步，试试这个方向</strong><p>${esc(report.nextFocus)}</p>${button('按这个建议继续练 →', 'start-recommended', 'secondary-button', `data-id="${esc(s.id)}" data-goal="${esc(s.goal)}" ${current() ? 'disabled' : ''}`)}</div></div><p class="fine-print">AI 初步判断：${esc(report.level)} · 仅根据已有作答，不代表正式考试成绩。</p>` : ''}${roundReview(s)}${unfinishedReview(s)}<div class="form-actions">${button('回到学习页', 'home')}${button('回顾错题', 'review', 'secondary-button')}</div></section>`;
+}
+function unfinishedReview(session) {
+  const pending = session.unfinished;
+  if (!pending) return '';
+  return `<section class="dash-panel unfinished-review"><h2>未提交的草稿 · 未计分</h2><p>结束本轮时保留，未加入题数、时长或能力判断。</p><p class="chat-text">${esc(pending.task.prompt)}</p>${taskQuestions(pending.task).map((q,i)=>`<p>${taskQuestions(pending.task).length>1 ? i+1+'. ' : ''}${esc(q.prompt)}</p>`).join('')}<pre class="chat-text">${esc((()=>{try{const values=JSON.parse(pending.answer);return Array.isArray(values) ? values.map((value,i)=>`${i+1}. ${value || '（未填写）'}`).join('\n') : pending.answer;}catch{return pending.answer || '（未填写）';}})())}</pre>${(session.discussions?.[pending.task.id] || []).map(turn=>`<p class="chat-text"><strong>你</strong> ${esc(turn.message)}</p><p class="chat-text"><strong>教练</strong> ${esc(turn.reply)}</p>`).join('')}</section>`;
 }
 function roundReview(session) {
   if (!session.history.length) return '';
   return `<section class="round-review" aria-label="本轮逐题回顾"><div class="section-title"><h2>本轮逐题回顾</h2><span class="muted">展开看回答与解析</span></div>${session.history.map((entry, index) => {
     const task = entry.task, feedback = entry.feedback;
     const helpers = [entry.hintUsed && '使用了提示', entry.replays > 0 && `播放听力 ${entry.replays} 次`, entry.transcriptViewed && '查看了听力原文'].filter(Boolean);
-    const items = taskQuestions(task), answers = items.length === 1 ? [entry.answer] : (() => { try { const parsed = JSON.parse(entry.answer); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })();
-    const questionReview = items.map((item, itemIndex) => `<div class="round-subquestion"><strong>${items.length > 1 ? `${itemIndex + 1}. ` : ''}${esc(item.prompt)}</strong>${item.options.length ? `<ol class="round-options" type="A">${item.options.map(option => `<li lang="en" class="${answers[itemIndex] === option ? 'selected' : ''}">${esc(option)}</li>`).join('')}</ol>` : ''}<p>你的回答：<span lang="en">${esc(answers[itemIndex] || '')}</span></p><p>参考答案：<span lang="en">${esc(item.answer)}</span></p></div>`).join('');
-    return `<details class="round-question"><summary><span class="round-number">${index + 1}</span><span class="round-question-title"><strong>${esc(task.skill)} · ${esc(task.level)}</strong><span>${esc(task.prompt)}</span></span><span class="round-result ${feedback.correct ? 'right' : 'wrong'}">${feedback.correct ? '答对' : '再巩固'}</span></summary><div class="round-answer">
+    const questionReview=renderAnswerReview(entry,esc), score=roundCounts([entry]);
+    return `<details class="round-question"><summary><span class="round-number">${index + 1}</span><span class="round-question-title"><strong>${esc(task.skill)} · ${esc(task.level)}</strong><span>${esc(task.prompt)}</span></span><span class="round-result ${feedback.correct ? 'right' : 'wrong'}">${score.count>1 ? `${score.correct} / ${score.count} 小题` : feedback.correct ? '答对' : '再巩固'}</span></summary><div class="round-answer">
       ${task.passage ? `<div class="reading-passage" lang="en">${esc(task.passage)}</div>${task.translation ? `<div class="reading-translation" lang="zh-CN"><span>中文译文</span><p>${esc(task.translation)}</p></div>` : ''}` : ''}${task.audio ? `<div class="round-material"><strong>听力原文</strong><p lang="en">${esc(task.audio)}</p></div>` : ''}
       ${questionReview}
       <div class="round-explanation"><strong>理解这道题</strong><p>${esc(feedback.explanation)}</p>${feedback.suggestion ? `<p><strong>表达建议</strong><br>${esc(feedback.suggestion)}</p>` : ''}</div>
@@ -345,7 +387,7 @@ function roundReview(session) {
 function reviewPage() {
   if (!reviewData) return '<div class="empty-state">正在读取错题…</div>';
   const mistakes = reviewData.items;
-  return `<section class="review-page"><h1>错题回顾</h1><p class="review-lead">${esc(goal)} · ${reviewData.total} 道错题</p><div class="review-list">${mistakes.length ? mistakes.map(m => `<article class="review-item"><div class="review-item-top"><span class="skill-tag">${m.task.skill}</span><span>${date(m.at)}</span></div><h2>${esc(m.feedback.weakness)}</h2><p>${esc(m.task.prompt)}</p><details><summary>查看回答与解析</summary>${m.task.passage ? `<p>${esc(m.task.passage)}</p>` : ''}${m.task.audio ? `<p>${esc(m.task.audio)}</p>` : ''}<p>你的回答：${esc(m.answer)}</p><p>参考答案：${esc(m.task.answer)}</p><p>${esc(m.feedback.explanation)}</p></details>${button('换道题再练一次 →', 'retry-mistake', 'text-button', `data-id="${m.id}" ${current() ? 'disabled' : ''}`)}</article>`).join('') : `<div class="empty-state"><span>✦</span><h2>这里会留下值得再练的知识点</h2><p>完成练习后，答错的题目和解析会自动整理到这里。</p>${button('开始学习', 'home')}</div>`}</div>${reviewData.total > 20 ? `<div class="review-pagination">${button('上一页','review-prev','secondary-button', reviewOffset ? '' : 'disabled')}<span>${Math.floor(reviewOffset/20)+1} / ${Math.ceil(reviewData.total/20)}</span>${button('下一页','review-next','secondary-button', reviewData.hasMore ? '' : 'disabled')}</div>` : ''}${current() ? `<p class="help">完成当前练习后可重练错题。</p>` : ''}</section>`;
+  return `<section class="review-page"><h1>错题回顾</h1><p class="review-lead">${esc(goal)} · ${reviewFilter === 'due' ? '到期知识点' : '历史错题'} ${reviewData.total} 项</p><div class="review-filters">${button(`到期复习 ${reviewData.dueCount || 0}`,'review-due','secondary-button',`aria-pressed="${reviewFilter==='due'}"`)}${button('全部错题','review-all','secondary-button',`aria-pressed="${reviewFilter==='all'}"`)}</div><p class="activity-note">同一知识点合并安排；跨日独立答对后延长间隔，同日重做或用提示答对不记作跨日巩固。</p><div class="review-list">${mistakes.length ? mistakes.map(m => `<article class="review-item"><div class="review-item-top"><span class="skill-tag">${m.task.skill}</span><span>${date(m.at)}</span></div><h2>${esc(m.reviewStatus?.weakness || m.feedback.weakness)}</h2>${m.reviewStatus ? `<span class="review-status">${esc(m.reviewStatus.status)} · 下次 ${esc(m.reviewStatus.dueDate)} · 跨日巩固 ${m.reviewStatus.streak}/3 次</span>` : ''}<p>${esc(m.task.prompt)}</p><details><summary>查看回答与解析</summary>${m.task.passage ? `<p>${esc(m.task.passage)}</p>` : ''}${m.task.audio ? `<p>${esc(m.task.audio)}</p>` : ''}${renderAnswerReview(m,esc)}<p>${esc(m.feedback.explanation)}</p></details>${button('换道题再练一次 →', 'retry-mistake', 'text-button', `data-id="${m.id}" ${m.reviewQuestionIndex !== undefined ? `data-question-index="${m.reviewQuestionIndex}"` : ''} ${current() ? 'disabled' : ''}`)}</article>`).join('') : `<div class="empty-state"><span>✦</span><h2>这里会留下值得再练的知识点</h2><p>${reviewFilter==='due' ? '今天没有到期复习，可以在全部错题中查看其他知识点。' : '完成练习后，答错的题目和解析会自动整理到这里。'}</p>${button('开始学习', 'home')}</div>`}</div>${reviewData.total > 20 ? `<div class="review-pagination">${button('上一页','review-prev','secondary-button', reviewOffset ? '' : 'disabled')}<span>${Math.floor(reviewOffset/20)+1} / ${Math.ceil(reviewData.total/20)}</span>${button('下一页','review-next','secondary-button', reviewData.hasMore ? '' : 'disabled')}</div>` : ''}${current() ? `<p class="help">完成当前练习后可重练错题。</p>` : ''}</section>`;
 }
 
 function stopMedia() {
@@ -359,7 +401,7 @@ function playAudio(restart = false) {
   stopMedia(); error = '';
   listeningPlayer.play(current()?.current?.audio, speed);
 }
-function voiceInput(field = 'answer') {
+function voiceInput(field = 'answer', questionIndex = null) {
   if (native) {
     voiceMessage = '点击 iPhone 键盘上的麦克风听写，确认文字后再提交。'; render();
     app.querySelector(field === 'coachMessage' ? '#coach-message' : '#answer-text')?.focus(); return;
@@ -368,11 +410,14 @@ function voiceInput(field = 'answer') {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) { voiceMessage = '此浏览器不支持语音转写，请用键盘输入或换用支持的浏览器。'; render(); return; }
   stopMedia();
-  const taskId = current().current.id, before = draft[field] || '';
+  const taskId = current().current.id;
   const r = new SpeechRecognition(); recognition = r; r.lang = field === 'coachMessage' ? 'zh-CN' : 'en-US'; r.interimResults = false; r.continuous = false;
   r.onresult = event => {
     if (draft.taskId !== taskId || recognition !== r) return;
-    draft[field] = `${before} ${event.results[0][0].transcript}`.trim().slice(0, field === 'coachMessage' ? 2000 : 4000);
+    const count=taskQuestions(current()?.current).length;
+    const before=questionIndex === null ? draft[field] || '' : questionAnswers(draft.answer,count)[questionIndex];
+    const value=`${before} ${event.results[0][0].transcript}`.trim().slice(0, field === 'coachMessage' ? 2000 : 4000);
+    if(questionIndex === null)draft[field]=value;else{draft.answer=updateQuestionAnswer(draft.answer,count,questionIndex,value);clearSkip(questionIndex);}
     if (field === 'coachMessage') draft.coachRequestId = null;
     persistDraft();
     voiceMessage = '转写完成，请确认文字后提交。'; lastActivity = Date.now();
@@ -383,10 +428,52 @@ function voiceInput(field = 'answer') {
   try { r.start(); } catch { recognition = null; voiceMessage = '麦克风暂时不可用，请重试。'; }
   render();
 }
+// Keep the mobile keyboard and caret when tapping answer tools.
+app.addEventListener('pointerdown', event => {
+  if (event.target.closest('[data-action="answer-newline"], [data-action="answer-next-field"]')) event.preventDefault();
+});
 app.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
+  if (action === 'draft-use-saved' || action === 'draft-restore-version') {
+    const value=action === 'draft-use-saved' ? draftStore.read(draft.taskId) : draftStore.conflicts(draft.taskId)[Number(el.dataset.index)];
+    if(value){draft={...value};persistDraft(true);render();}return;
+  }
+  if(action==='draft-keep-mine'){persistDraft(true);render();return;}
+  if(action==='timer-toggle'){draft.timerPaused=!draft.timerPaused;persistDraft();render();return;}
+  if(action==='skip-question'){
+    const index=Number(el.dataset.questionIndex),items=taskQuestions(current()?.current),selected=new Set(draft.skippedQuestions || []);
+    if(selected.has(index))selected.delete(index);else{selected.add(index);if(items.length===1)draft.answer='';else{let values;try{values=JSON.parse(draft.answer);}catch{values=[];}if(!Array.isArray(values) || values.length!==items.length)values=Array(items.length).fill('');values[index]='';draft.answer=JSON.stringify(values);}}
+    draft.skippedQuestions=[...selected];persistDraft();render();return;
+  }
+  if (action === 'review-due' || action === 'review-all') {
+    reviewFilter = action === 'review-due' ? 'due' : 'all'; return navigate('review');
+  }
+  if (action === 'review') reviewFilter = 'all';
+  if (action === 'recover-report') return run('正在根据本轮保存的回答补生成小结…',async()=>{
+    const id=el.dataset.id;
+    await api('session/report',{sessionId:id});detailSession=await request(`session/detail?id=${encodeURIComponent(id)}`);screen='summary';
+    notice='小结已补生成，原答案、题数和作答时长没有增加。';
+  });
+  if (action === 'demo-answer') { demoAnswer = ['read','reads'].includes(el.dataset.value) ? el.dataset.value : ''; return render(); }
+  if (action === 'connect-existing') return run('正在检查已有 Codex 登录…', async () => {
+    const status = await request('codex/status');
+    if (!status.loggedIn) { navigate('settings'); notice = '尚未检测到已登录的 Codex，可在这里授权，或选择其他服务商。'; return; }
+    await api('settings', { provider: 'codex', baseURL: '', model: '' });
+    await api('settings/test', {}); navigate('home'); notice = '已连接并通过测试，可以开始练习。';
+  });
+  if (action === 'answer-newline' || action === 'answer-next-field') {
+    const field = document.getElementById(action === 'answer-newline' ? el.dataset.field : el.dataset.next);
+    if (!field || field.disabled) return;
+    field.focus({ preventScroll: true });
+    if (action === 'answer-newline' && field.value.length - (field.selectionEnd - field.selectionStart) < field.maxLength) {
+      field.setRangeText('\n', field.selectionStart, field.selectionEnd, 'end');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    keepFocusedFieldVisible(field);
+    return;
+  }
   if (action === 'models-refresh') return fetchModels();
   if (action === 'app-update-check') return checkAppUpdate();
   if (action === 'models-mode') {modelCatalog.manual = !modelCatalog.manual; modelCatalog.query = ''; return paintModelPicker();}
@@ -442,7 +529,7 @@ app.addEventListener('click', async event => {
   if (action === 'history') { summaryId = el.dataset.id; detailSession = null; screen = 'summary'; window.scrollTo({ top: 0, behavior: 'instant' }); return run('正在读取练习记录…', async () => { detailSession = await request(`session/detail?id=${encodeURIComponent(summaryId)}`); }); }
   if (action === 'review-next' || action === 'review-prev') {
     const offset = Math.max(0, reviewOffset + (action === 'review-next' ? 20 : -20));
-    return run('正在读取错题…', async () => { reviewData = await request(`review?goal=${encodeURIComponent(goal)}&offset=${offset}`); reviewOffset = offset; window.scrollTo({top:0,behavior:'instant'}); });
+    return run('正在读取错题…', async () => { reviewData = await request(`review?goal=${encodeURIComponent(goal)}&offset=${offset}&filter=${reviewFilter}`); reviewOffset = offset; window.scrollTo({top:0,behavior:'instant'}); });
   }
   if (action === 'codex-refresh') return refreshCodex();
   if (['codex-login', 'codex-device', 'codex-cancel'].includes(action)) return run('正在连接 Codex 授权服务…', async () => {
@@ -451,9 +538,13 @@ app.addEventListener('click', async event => {
     if (codexStatus.login?.state === 'pending') codexPolling = setTimeout(refreshCodex, 3000);
   });
   if (action === 'test-connection') return run('正在测试已保存的模型…', async () => { await api('settings/test', {}); notice = '连接成功，模型已返回有效 JSON。可以开始学习了。'; });
-  if (['start','retry-mistake','start-again'].includes(action)) {
+  if (['start','retry-mistake','start-again','start-recommended','replace-round'].includes(action)) {
     if (!data.configured) { navigate('settings'); notice = '请先连接 AI，保存并测试配置后即可开始。'; return render(); }
-    const input = action === 'start-again' ? starting : { goal, mode: el.dataset.mode || '综合', placement: false, reviewId: el.dataset.id };
+    const input = action === 'start-again' ? starting : { goal: el.dataset.goal || goal, mode: el.dataset.mode || '综合', placement: false,
+      ...(action === 'retry-mistake' ? {reviewId:el.dataset.id, ...(el.dataset.questionIndex !== undefined ? {reviewQuestionIndex:Number(el.dataset.questionIndex)} : {})} : {}),
+      ...(action === 'start-recommended' ? el.dataset.id ? {recommendationId:el.dataset.id} : {useProfileFocus:true} : {}) };
+    if (action === 'replace-round') { const active = current(); if (!active) return navigate('home'); input.replaceSessionId = active.id; input.draftTaskId = active.current.id; input.draftAnswer = draft.taskId === active.current.id ? draft.answer || '' : ''; }
+    goal=input.goal;localStorage.setItem('lsc-goal-v1',goal);
     starting = input; screen = 'starting';
     const operation = run('AI 正在准备第一道题…', async () => {
       try {
@@ -463,7 +554,7 @@ app.addEventListener('click', async event => {
         // response during a slow Codex turn, recover the committed session automatically.
         try {
           await api('state');
-          if (current()?.goal === goal && current()?.mode === input.mode && current()?.current) {
+          if (current()?.goal === goal && current()?.mode === input.mode && current()?.current && (!input.replaceSessionId || current().id !== input.replaceSessionId)) {
             screen = 'session';
             notice = '这一轮已经准备好了，刚才的连接响应没有及时返回。';
             return;
@@ -477,6 +568,15 @@ app.addEventListener('click', async event => {
     return operation;
   }
   const s = current(); if (!s) return;
+  if (action === 'regrade') {
+    draft.regradeRequests ||= {};
+    draft.regradeRequests[el.dataset.id] ||= crypto.randomUUID(); persistDraft();
+    return run('正在结合原回答与追问复核批改…', async () => {
+      await api('session/regrade', { sessionId: s.id, taskId: el.dataset.id, requestId: draft.regradeRequests[el.dataset.id] });
+      delete draft.regradeRequests[el.dataset.id]; persistDraft();
+      notice = '批改已复核，题数和作答时长没有重复累计。';
+    });
+  }
   if (['composer-answer', 'composer-coach', 'discuss-task'].includes(action)) {
     stopMedia();
     draft.coachRequestId = null;
@@ -499,6 +599,7 @@ app.addEventListener('click', async event => {
   if (action === 'answer-option') {
     const items = taskQuestions(s.current), questionIndex = Number(el.dataset.questionIndex || 0), option = items[questionIndex]?.options[Number(el.dataset.index)];
     if (option === undefined) return;
+    draft.skippedQuestions=(draft.skippedQuestions || []).filter(i=>i!==questionIndex);
     if (items.length === 1) draft.answer = option;
     else { let values; try { values = JSON.parse(draft.answer || '[]'); } catch { values = []; } if (!Array.isArray(values) || values.length !== items.length) values = Array(items.length).fill(''); values[questionIndex] = option; draft.answer = JSON.stringify(values); }
     persistDraft(); return render();
@@ -506,7 +607,7 @@ app.addEventListener('click', async event => {
   if (action === 'hint') { draft.hintUsed = true; persistDraft(); return render(); }
   if (action === 'transcript') { draft.transcriptViewed = true; persistDraft(); return render(); }
   if (action === 'audio' || action === 'replay') return playAudio(action === 'replay');
-  if (action === 'voice') return voiceInput(el.dataset.field || 'answer');
+  if (action === 'voice') return voiceInput(el.dataset.field || 'answer',el.dataset.questionIndex === undefined ? null : Number(el.dataset.questionIndex));
   if (action === 'submit') {
     pendingChat = { taskId: s.current.id, text: draft.answer }; chatScrollToEnd = true;
     return run(s.history.length + 1 < s.targetCount ? '正在批改并准备下一题…' : '正在认真看你的回答…', async () => {
@@ -515,7 +616,7 @@ app.addEventListener('click', async event => {
   }
   if (action === 'next') { chatScrollToEnd = true; return run(s.nextReady ? '正在切换到下一题…' : '正在结合你的表现安排下一题…', () => api('session/next', { sessionId: s.id, taskId: s.current.id })); }
   if (action === 'finish') return run(s.history.length ? '正在整理学习小结与下一步建议…' : '正在结束本轮…', async () => {
-    await api('session/finish', { sessionId: s.id }); summaryId = s.id; detailSession = await request(`session/detail?id=${encodeURIComponent(s.id)}`); screen = 'summary';
+    await api('session/finish', { sessionId: s.id, draftTaskId:s.current.id, draftAnswer:draft.taskId===s.current.id ? draft.answer || '' : '' }); summaryId = s.id; detailSession = await request(`session/detail?id=${encodeURIComponent(s.id)}`); screen = 'summary';
   });
 });
 app.addEventListener('input', event => {
@@ -523,10 +624,11 @@ app.addEventListener('input', event => {
   if (event.target.classList.contains('task-text-answer')) {
     let values; try { values = JSON.parse(draft.answer || '[]'); } catch { values = []; }
     const items = taskQuestions(current()?.current); if (!Array.isArray(values) || values.length !== items.length) values = Array(items.length).fill('');
+    clearSkip(Number(event.target.dataset.questionIndex));
     values[Number(event.target.dataset.questionIndex)] = event.target.value; draft.answer = JSON.stringify(values); persistDraft();
     const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); return;
   }
-  if (event.target.id === 'answer-text') { draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); }
+  if (event.target.id === 'answer-text') { clearSkip(0); draft.answer = event.target.value; persistDraft(); const submit = app.querySelector('[data-action="submit"]'); if (submit) submit.disabled = !answerComplete(current()?.current, draft.answer); }
   if (event.target.id === 'coach-message') { draft.coachMessage = event.target.value; draft.coachRequestId = null; persistDraft(); const send = app.querySelector('[data-action="send-coach"]'); if (send) send.disabled = !draft.coachMessage.trim(); }
   if (event.target.id === 'model-search') {
     modelCatalog.query = event.target.value;
@@ -574,6 +676,10 @@ app.addEventListener('submit', event => {
     });
   }
   if (event.target.id === 'chat-composer') { event.preventDefault(); app.querySelector(`[data-action="${isDiscussing(current(), draft) ? 'send-coach' : 'submit'}"]`)?.click(); return; }
+  if (event.target.id === 'learning-plan-form') {
+    event.preventDefault(); const input=Object.fromEntries(new FormData(event.target));
+    return run('正在保存学习安排…', async()=>{await api('learning-plan',input);notice='学习安排已保存，之后出题会参考你的时间、日期和场景。';});
+  }
   if (event.target.id !== 'settings-form') return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(event.target)); settingsDraft = values;
   run('正在保存本机配置…', async () => { await api('settings', values); settingsDraft = { ...data.config, apiKey: '' }; notice = '配置已保存。可以测试连接，或回到学习页开始练习。'; });
@@ -594,8 +700,8 @@ app.addEventListener('cancel',event=>{if(event.target.matches('.plan-welcome')){
 ['pointerdown','keydown','input'].forEach(type => document.addEventListener(type, () => { lastActivity = Date.now(); }));
 document.addEventListener('visibilitychange', () => { lastActivity = Date.now(); if (document.hidden) { stopMedia(); persistDraft(); } else {if (screen === 'session') render();automaticSync();} });
 setInterval(() => {
-  if (screen === 'session' && !busy && !document.hidden && current()?.current && !current().feedback && (Date.now() - lastActivity < 60000 || audioState === 'playing' || recognition)) {
-    draft.activeSeconds = Math.min(1800, (draft.activeSeconds || 0) + 1); if (draft.activeSeconds % 5 === 0) persistDraft();
+  if (screen === 'session' && !busy && !document.hidden && current()?.current && !current().feedback && !draft.timerPaused) {
+    draft.activeSeconds = Math.min(1800, (draft.activeSeconds || 0) + 1);const timer=app.querySelector('#practice-timer');if(timer)timer.textContent=`本题前台用时 ${duration(draft.activeSeconds)}`; if (draft.activeSeconds % 5 === 0) persistDraft();
   }
 }, 1000);
 window.addEventListener('online',automaticSync);

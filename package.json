@@ -1,7 +1,7 @@
 {
   "name": "language-study-coach",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "desktop/main.mjs",
   "scripts": {
@@ -13,9 +13,10 @@
     "verify:codex": "node scripts/verify-codex.js",
     "ios:sync": "node scripts/build-native-ios.mjs",
     "ios:open": "node scripts/open-native-ios.mjs",
-    "desktop:dev": "npm run build && electron desktop/main.mjs",
-    "desktop:pack": "npm run build && electron-builder --dir --win",
-    "desktop:build": "npm run build && electron-builder --win nsis portable"
+    "desktop:config": "node scripts/build-desktop-config.mjs",
+    "desktop:dev": "npm run desktop:config && npm run build && electron desktop/main.mjs",
+    "desktop:pack": "npm run desktop:config && npm run build && electron-builder --dir --win",
+    "desktop:build": "npm run desktop:config && npm run build && electron-builder --win nsis"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",

@@ -1,8 +1,9 @@
 import { app, BrowserWindow, session, shell } from 'electron';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAPI } from '../server/api.js';
+import { validateSyncConfig } from '../server/cloud-sync.js';
 import { createDesktopServer } from './static-server.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -10,6 +11,22 @@ const isLocal = value => { try { const u = new URL(value); return u.protocol ===
 const isTrustedExternal = value => { try { const u = new URL(value); return u.protocol === 'https:' && ['auth.openai.com', 'chatgpt.com', 'auth0.openai.com', 'github.com', 'www.github.com'].includes(u.hostname); } catch { return false; } };
 
 let mainWindow, localServer, api, quitting = false;
+
+async function loadPublicConfig() {
+  const file = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar', 'desktop', 'public-config.json')
+    : path.join(here, 'public-config.json');
+  try {
+    const value = JSON.parse(await readFile(file, 'utf8'));
+    const sync = value?.url && value?.publishableKey
+      ? validateSyncConfig({url:value.url,publishableKey:value.publishableKey})
+      : undefined;
+    return {sync,turnstileSiteKey:String(value?.turnstileSiteKey || '')};
+  } catch (error) {
+    if (error?.code !== 'ENOENT') console.warn('Desktop public configuration unavailable:', error.message);
+    return {sync:undefined,turnstileSiteKey:''};
+  }
+}
 
 async function createWindow(port) {
   mainWindow = new BrowserWindow({
@@ -27,7 +44,11 @@ async function start() {
   const staticRoot = app.isPackaged ? path.join(process.resourcesPath, 'app.asar', 'dist') : path.join(here, '..', 'dist');
   await access(path.join(staticRoot, 'index.html'));
   const dataDirectory = path.join(app.getPath('userData'), 'data');
-  api = await createAPI({ directory: dataDirectory });
+  const publicConfig = await loadPublicConfig();
+  api = await createAPI({ directory: dataDirectory, syncOptions: {
+    defaultConfig: publicConfig.sync,
+    turnstileSiteKey: publicConfig.turnstileSiteKey,
+  } });
   localServer = createDesktopServer({ api, staticRoot, onAuthCallback: () => { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); } } });
   const port = await localServer.listen();
   await createWindow(port);

@@ -23,7 +23,7 @@ const emailValue=value=>{
 };
 
 // Learning data and auth use different stores. Auth never leaves this controller.
-export function createCloudSync({load,save,engine,transport=fetch,authFactory=createClient,now=()=>Date.now(),schedule=true,defaultConfig}) {
+export function createCloudSync({load,save,engine,transport=fetch,authFactory=createClient,now=()=>Date.now(),schedule=true,defaultConfig,turnstileSiteKey=''}) {
   let state,initializing,client,clientConfig,queue=Promise.resolve(),timer,closed=false,phase='idle',lastError='',epoch=0;
   let stopVersion=0;
   const otpWindow=15*60*1000, otpCooldown=60*1000, otpWindowLimit=5, otpDayLimit=10, otpFailureLimit=8, otpLock=15*60*1000;
@@ -155,7 +155,7 @@ export function createCloudSync({load,save,engine,transport=fetch,authFactory=cr
   }
   async function status() {
     await init();
-    return {configured:!!state.config,managed:!!defaultConfig,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,
+    return {configured:!!state.config,managed:!!defaultConfig,url:state.config?.url || '',connected:!!state.session,email:state.owner?.email || '',enabled:state.enabled,phase,lastError,lastSync:state.lastSync,turnstileSiteKey:String(turnstileSiteKey || ''),
       conflicts:Object.values(state.conflicts).map(c=>({kind:c.record.kind,id:c.record.id})),bound:!!state.owner};
   }
   function pruneOtp(nowValue) {

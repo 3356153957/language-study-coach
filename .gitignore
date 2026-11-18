@@ -9,6 +9,7 @@ build/
 output/
 .playwright-cli/
 ios/App/App/NativeResources/
+desktop/public-config.json
 ios/App.xcodeproj/
 ios/App/App/Native/Info.plist
 supabase/.temp/
