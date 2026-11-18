@@ -1,3 +1,6 @@
+import { renderReadingPassage } from './reading-words.js';
+import { renderRevisionHistory } from './answer-review.js';
+import { answerCounts } from '../server/answer-results.js';
 import { modeName } from './icons.js';
 export function discussionTarget(session, draft) {
   return session.history.find(entry => entry.task.id === draft.discussTaskId)?.task || session.current;
@@ -19,21 +22,21 @@ function selectedAnswers(value, count) {
   } catch { return Array(count).fill(''); }
 }
 
-function answerComplete(task, value) {
+function answerComplete(task, value, skippedQuestions = []) {
   const items = taskQuestions(task);
-  if (items.length === 1) return !!String(value || '').trim();
+  if (items.length === 1) return !!String(value || '').trim() || skippedQuestions.includes(0);
   try {
     const parsed = JSON.parse(value || '[]');
-    return Array.isArray(parsed) && parsed.length === items.length && parsed.every((answer, i) => typeof answer === 'string' && !!answer.trim() && (!items[i].options.length || items[i].options.includes(answer)));
+    return Array.isArray(parsed) && parsed.length === items.length && parsed.every((answer, i) => typeof answer === 'string' && (skippedQuestions.includes(i) || !!answer.trim() && (!items[i].options.length || items[i].options.includes(answer))));
   } catch { return false; }
 }
 
-function answerText(task, value) {
+function answerText(task, value, skippedQuestions = []) {
   const items = taskQuestions(task);
   if (items.length === 1) return value || '';
   try {
     const values = JSON.parse(value || '[]');
-    return values.map((answer, index) => `${index + 1}. ${answer || '未选择'}`).join('\n');
+    return values.map((answer, index) => `${index + 1}. ${answer || (skippedQuestions.includes(index) ? '未作答（已标记不会）' : items[index].options.length ? '未选择':'未填写')}`).join('\n');
   } catch { return value || ''; }
 }
 
@@ -51,20 +54,21 @@ export function renderLearningChat({ session: s, draft, busy, pendingChat, esc, 
     const active = task.id === s.current.id, feedback = entry?.feedback;
     const items = taskQuestions(task), chosen = selectedAnswers(entry?.answer || (active ? draft.answer : ''), items.length);
     const itemHtml = items.map((item, questionIndex) => `${items.length > 1 ? `<h3 class="task-subprompt">${questionIndex + 1}. ${esc(item.prompt)}</h3>` : `<h2 class="task-prompt">${esc(item.prompt)}</h2>`}
-      ${item.options.length ? `<div class="exercise-options" role="group" aria-label="第 ${questionIndex + 1} 小题选项">${item.options.map((option, optionIndex) => { const picked = chosen[questionIndex] === option; const right = feedback && item.answer === option; const wrong = feedback && picked && !right; return `<button class="exercise-option ${picked ? 'selected' : ''} ${right ? 'correct' : ''} ${wrong ? 'wrong' : ''}" data-action="answer-option" data-question-index="${questionIndex}" data-index="${optionIndex}" aria-pressed="${picked}" ${busy || !active || feedback ? 'disabled' : ''}><span>${String.fromCharCode(65 + optionIndex)}</span><strong>${esc(option)}</strong></button>`; }).join('')}</div>` : items.length > 1 && active && !feedback ? `<label class="sr-only" for="task-answer-${questionIndex}">${questionIndex + 1}. ${esc(item.prompt)}</label><textarea id="task-answer-${questionIndex}" class="task-text-answer" data-question-index="${questionIndex}" maxlength="4000" placeholder="用英语回答第 ${questionIndex + 1} 个问题">${esc(chosen[questionIndex] || '')}</textarea>` : ''}`).join('');
-    return row('coach', `英语教练 · 第 ${index + 1} 题`, `<div class="chat-question-meta"><span class="skill-tag">${esc(task.skill)} · ${esc(task.level)}</span><span>${types[task.kind]}${items.length > 1 ? ` · ${items.length} 小题` : ''}</span>${button('追问这题', 'discuss-task', 'text-button', `data-id="${esc(task.id)}"`)}</div>${task.passage ? `<div class="reading-passage" lang="en">${esc(task.passage)}</div>${(feedback || !active) && task.translation ? `<div class="reading-translation" lang="zh-CN"><span>中文译文</span><p>${esc(task.translation)}</p></div>` : ''}` : ''}${audio(task, active)}${itemHtml}
+      ${item.options.length ? `<div class="exercise-options" role="group" aria-label="第 ${questionIndex + 1} 小题选项">${item.options.map((option, optionIndex) => { const picked = chosen[questionIndex] === option; const right = feedback && item.answer === option; const wrong = feedback && picked && !right; return `<button class="exercise-option ${picked ? 'selected' : ''} ${right ? 'correct' : ''} ${wrong ? 'wrong' : ''}" data-action="answer-option" data-question-index="${questionIndex}" data-index="${optionIndex}" aria-pressed="${picked}" ${busy || !active || feedback ? 'disabled' : ''}><span>${String.fromCharCode(65 + optionIndex)}</span><strong>${esc(option)}</strong></button>`; }).join('')}</div>` : items.length > 1 && active && !feedback ? `<label class="sr-only" for="task-answer-${questionIndex}">${questionIndex + 1}. ${esc(item.prompt)}</label><textarea id="task-answer-${questionIndex}" class="task-text-answer" data-question-index="${questionIndex}" maxlength="4000" placeholder="用英语回答第 ${questionIndex + 1} 个问题" ${busy ? 'disabled' : ''}>${esc(chosen[questionIndex] || '')}</textarea><div class="answer-field-tools">${button('换行', 'answer-newline', 'secondary-button', `data-field="task-answer-${questionIndex}"`)}${questionIndex + 1 < items.length ? button('下一答题格 →', 'answer-next-field', 'secondary-button', `data-field="task-answer-${questionIndex}" data-next="task-answer-${questionIndex + 1}"`) : ''}</div>` : ''}${active && !feedback ? `<div class="answer-field-tools">${!item.options.length && items.length>1 ? button('语音输入','voice','text-button',`data-question-index="${questionIndex}"`) : ''}${button(draft.skippedQuestions?.includes(questionIndex) ? '取消不会标记' : items.length>1 ? '这问不会' : '这题不会','skip-question','text-button',`data-question-index="${questionIndex}" aria-pressed="${!!draft.skippedQuestions?.includes(questionIndex)}"`)}${draft.skippedQuestions?.includes(questionIndex) ? '<span class="skip-note">已标记未作答，可继续提交</span>' : ''}</div>` : ''}`).join('');
+    return row('coach', `英语教练 · 第 ${index + 1} 组`, `<div class="chat-question-meta"><span class="skill-tag">${esc(task.skill)} · ${esc(task.level)}</span><span>${types[task.kind]}${items.length > 1 ? ` · ${items.length} 小题` : ''}</span>${button('追问这题', 'discuss-task', 'text-button', `data-id="${esc(task.id)}"`)}</div>${items.length > 1 || items[0].prompt !== task.prompt ? text(task.prompt) : ''}${task.passage ? `${renderReadingPassage({passage:task.passage,taskId:task.id,sessionId:s.id,marks:s.wordMarks,esc})}${(feedback || !active) && task.translation ? `<div class="reading-translation" lang="zh-CN"><span>中文译文</span><p>${esc(task.translation)}</p></div>` : ''}` : ''}${audio(task, active)}${itemHtml}
       ${active && !feedback ? `<div class="chat-hint">${button(draft.hintUsed ? '提示已展开' : '给我一点提示', 'hint', 'text-button')}${draft.hintUsed ? text(task.hint) : ''}</div>` : ''}
       <details class="chat-reason"><summary>为什么练这道题</summary>${text(task.reason)}</details>`, `data-question-id="${esc(task.id)}"`);
   }
   function feedback(entry) {
-    const f = entry.feedback;
-    return row('coach', '英语教练', `<span class="chat-result ${f.correct ? 'positive' : 'improve'}">${f.correct ? '回答正确' : '一起改得更准确'}</span>${text(f.explanation)}${f.suggestion ? `<div class="chat-revision"><strong>你的表达，优化后</strong><p lang="en">${esc(f.suggestion)}</p></div>` : ''}${!f.correct ? `<details class="chat-material"><summary>${entry.task.options.length ? '查看参考答案' : '看看另一种参考表达'}</summary>${text(entry.task.answer)}</details>` : ''}`);
+    const f = entry.feedback, score = answerCounts(entry);
+    const resultLabel = score.count > 1 ? `本组答对 ${score.correct} / ${score.count} 小题` : f.correct ? '回答正确' : '一起改得更准确';
+    return row('coach', '英语教练', `<span class="chat-result ${f.correct ? 'positive' : 'improve'}">${esc(resultLabel)}</span>${text(f.explanation)}${f.questions?.map((q, i) => `<section class="feedback-item"><p class="chat-text">${i + 1}. ${entry.skippedQuestions?.includes(i) ? '未作答' : q.correct ? '答对' : '再巩固'} · ${esc(q.explanation || '')}</p>${q.suggestion ? `<div class="chat-revision"><strong>根据第 ${i+1} 项原句调整</strong><p lang="en">${esc(q.suggestion)}</p></div>` : ''}</section>`).join('') || ''}${button((entry.revisions?.length || 0)>=3 ? '已复核 3/3 次' : `复核这次批改（${entry.revisions?.length || 0}/3）`, 'regrade', 'text-button', `data-id="${esc(entry.task.id)}" ${(entry.revisions?.length || 0)>=3 ? 'disabled' : ''}`)}${renderRevisionHistory(entry,esc)}${f.suggestion ? `<div class="chat-revision"><strong>你的表达，优化后</strong><p lang="en">${esc(f.suggestion)}</p></div>` : ''}${!f.correct ? `<details class="chat-material"><summary>${entry.task.options.length ? '查看参考答案' : '看看另一种参考表达'}</summary>${taskQuestions(entry.task).map((q, i) => text(`${taskQuestions(entry.task).length > 1 ? `${i + 1}. ` : ''}${q.answer || ''}`)).join('')}</details>` : ''}`);
   }
   const events = [];
   const add = (at, html) => events.push({ at: at || s.startedAt, html });
   s.history.forEach((entry, index) => {
     add(entry.askedAt || s.history[index - 1]?.at || s.startedAt, question(entry.task, entry, index));
-    add(entry.at, row('user', '你', text(answerText(entry.task, entry.answer))));
+    add(entry.at, row('user', '你', text(answerText(entry.task, entry.answer, entry.skippedQuestions) || (entry.skippedQuestions?.length ? '未作答（已标记不会）' : ''))));
     add(entry.at, feedback(entry));
   });
   if (!s.history.some(entry => entry.task.id === s.current.id)) add(s.currentAskedAt || s.history.at(-1)?.at || s.startedAt, question(s.current, null, s.history.length));
@@ -85,12 +89,13 @@ export function renderLearningChat({ session: s, draft, busy, pendingChat, esc, 
   const targetIndex = s.history.findIndex(entry => entry.task.id === target.id);
   const targetNumber = targetIndex < 0 ? s.history.length + 1 : targetIndex + 1;
   const progress = Math.min(s.history.length + (s.feedback ? 0 : 1), s.targetCount);
-  return `<section class="session-page chat-session"><header class="chat-session-header"><div>${button('← 学习', 'home', 'back-button')}<h1>${esc(s.goal)} · ${s.placement ? '初步测评' : esc(modeName(s.mode)) + '练习'}</h1><span class="chat-progress">${progress} / ${s.targetCount}</span></div>${button(s.history.length ? '结束并生成小结' : '结束本轮', 'finish', 'text-button')}</header>
+  return `<section class="session-page chat-session"><header class="chat-session-header"><div>${button('← 学习', 'home', 'back-button')}<h1>${esc(s.goal)} · ${s.placement ? '初步测评' : esc(modeName(s.mode)) + '练习'}</h1><span class="chat-progress">第 ${progress} / ${s.targetCount} 组</span></div>${button(s.history.length ? '结束并生成小结' : '结束本轮', 'finish', 'text-button')}</header>
+    <p class="field-help practice-timing"><span id="practice-timer">本题前台用时 ${Math.floor((draft.activeSeconds || 0)/60)} 分 ${(draft.activeSeconds || 0)%60} 秒</span> · ${button(draft.timerPaused ? '继续计时' : '暂停计时','timer-toggle','text-button')}<small>离开页面自动暂停；每题最多 30 分钟</small></p>
     <div class="chat-log" id="chat-log" role="log" aria-label="学习对话" aria-live="polite" aria-relevant="additions">${events.map(event => event.html).join('')}</div>
     <div class="chat-bottom">${usesChatGPT?'<p class="subscription-note">正在使用 ChatGPT 订阅 <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">管理用量 ↗</a></p>':''}${s.feedback ? `<div class="chat-next-row"><span>${s.nextReady ? '下一题已准备好' : s.nextPreparationError || '回答已保存'}</span>${button(s.history.length >= s.targetCount ? '生成学习小结 →' : '继续下一题 →', s.history.length >= s.targetCount ? 'finish' : 'next', 'secondary-button')}</div>` : ''}
       <form id="chat-composer" class="chat-composer"><div class="composer-header"><div class="composer-modes" aria-label="输入用途">${!s.feedback ? `${button('作答', 'composer-answer', `composer-mode ${!discussing ? 'selected' : ''}`, `aria-pressed="${!discussing}"`)}${button('问教练', 'composer-coach', `composer-mode ${discussing ? 'selected' : ''}`, `aria-pressed="${discussing}"`)}` : '<strong>继续和教练聊</strong>'}</div><span>${discussing ? `讨论第 ${targetNumber} 题 · 中文或英文都可以` : '先想一想，再用英语回答'}</span></div>
-      ${discussing ? `<label class="sr-only" for="coach-message">给教练的消息</label><textarea id="coach-message" maxlength="2000" placeholder="比如：我想表达的是，提前把盘子摆在桌子上……" ${busy ? 'disabled' : ''}>${esc(draft.coachMessage)}</textarea>` : taskQuestions(s.current).length > 1 ? `<p class="composer-choice">请在上方每个输入格回答，回车切换到下一格。</p>` : taskQuestions(s.current).some(item => item.options.length) ? `<p class="composer-choice">${draft.answer ? '已完成部分选择' : '点击上方题卡选择答案，也可以先问教练。'}</p>` : `<label class="sr-only" for="answer-text">你的回答</label><textarea id="answer-text" maxlength="4000" placeholder="用英语表达你的想法……" ${busy ? 'disabled' : ''}>${esc(draft.answer)}</textarea>`}
-      <div class="composer-tools"><div>${discussing || (taskQuestions(s.current).length === 1 && !taskQuestions(s.current).some(item => item.options.length)) ? button(recognition ? '停止录音' : '语音输入', 'voice', 'voice-button', `data-field="${discussing ? 'coachMessage' : 'answer'}"`) : ''}<span class="voice-status" id="voice-status" aria-live="polite">${esc(voiceMessage || (discussing ? '澄清意思、问语法，随时聊。' : '转写后可修改，再提交。'))}</span></div>${button(discussing ? '发送给教练 ↑' : '提交回答 ↑', discussing ? 'send-coach' : 'submit', 'primary-button', (discussing ? draft.coachMessage : answerComplete(s.current, draft.answer)) ? '' : 'disabled')}</div>
+      ${discussing ? `<label class="sr-only" for="coach-message">给教练的消息</label><textarea id="coach-message" maxlength="2000" placeholder="比如：我想表达的是，提前把盘子摆在桌子上……" ${busy ? 'disabled' : ''}>${esc(draft.coachMessage)}</textarea>` : taskQuestions(s.current).length > 1 ? `<p class="composer-choice">每个问题各填一格；不会的小题可标记后提交。</p>` : taskQuestions(s.current).some(item => item.options.length) ? `<p class="composer-choice">${draft.answer ? '已完成部分选择' : '点击上方题卡选择答案，也可以先问教练。'}</p>` : `<label class="sr-only" for="answer-text">你的回答</label><textarea id="answer-text" maxlength="4000" placeholder="用英语表达你的想法……" ${busy ? 'disabled' : ''}>${esc(draft.answer)}</textarea>`}
+      <div class="composer-tools"><div>${discussing || (taskQuestions(s.current).length === 1 && !taskQuestions(s.current).some(item => item.options.length)) ? button(recognition ? '停止录音' : '语音输入', 'voice', 'voice-button', `data-field="${discussing ? 'coachMessage' : 'answer'}"`) : ''}${discussing || (taskQuestions(s.current).length === 1 && !taskQuestions(s.current).some(item => item.options.length)) ? button('换行', 'answer-newline', 'secondary-button', `data-field="${discussing ? 'coach-message' : 'answer-text'}"`) : ''}<span class="voice-status" id="voice-status" aria-live="polite">${esc(voiceMessage || (discussing ? '澄清意思、问语法，随时聊。' : '转写后可修改，再提交。'))}</span></div>${button(discussing ? '发送给教练 ↑' : '提交回答 ↑', discussing ? 'send-coach' : 'submit', 'primary-button', (discussing ? draft.coachMessage : answerComplete(s.current, draft.answer, draft.skippedQuestions)) ? '' : 'disabled')}</div>
       ${busy && !pendingChat ? `<p class="chat-thinking" role="status"><span class="spinner"></span>${esc(busy)}</p>` : ''}</form>
     </div></section>`;
 }

@@ -186,6 +186,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .transcript { margin-top: 16px; font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
 .summary-page .summary-time { font-size: 18px; }
 .summary-page .form-actions { justify-content: center; }
+.summary-warning { width: min(580px, 100%); margin: 4px 0 14px; padding: 13px 15px; border: 1px solid #ecd6a8; border-radius: 13px; background: #fff8e8; color: #765d2d; text-align: left; font-size: 12px; line-height: 1.5; }
+.summary-warning p { margin-top: 3px; color: #8b7547; }
+.answer-field-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+.answer-field-tools button { min-height: 40px; padding: 8px 12px; }
 .review-item details { margin-top: 18px; }
 .review-item summary { font-size: 12px; color: #776b96; cursor: pointer; }
 .review-item p { font-size: 14px; line-height: 1.75; white-space: pre-wrap; }
@@ -253,7 +257,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* Learning is one conversation, with the composer always within reach. */
 .chat-main { width:min(940px,calc(100% - 48px)); padding:20px 0 12px; }
-.chat-session { height:calc(100dvh - 112px); min-height:440px; display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+.chat-session { height:calc(100dvh - 112px); min-height:440px; display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; }
+.practice-timing { margin:4px 0; font-size:12px; }
+.practice-timing .text-button { min-height:32px; padding:4px 8px; margin:0; }
+.practice-timing small { display:block; font-size:11px; color:var(--muted); }
+.revision-history { margin:12px 0; }
+.revision-history section { padding:10px 0; border-top:1px solid var(--line); }
+#draft-save-status pre { max-height:160px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .chat-session-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0 4px 16px; border-bottom:1px solid var(--line); }
 .chat-session-header > div { display:flex; align-items:center; gap:16px; min-width:0; }
 .chat-session-header h1 { font-size:17px; letter-spacing:0; line-height:1.5; }
@@ -372,6 +382,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    visible viewport and prevent accidental horizontal page dragging. Tables
    retain their own horizontal scrolling container. */
 @media(max-width:600px) {
+ .summary-page h1 em { display:block; white-space:nowrap; }
  html, body, #app { width:100%; max-width:100%; }
  .chat-session, .chat-main { max-width:100%; min-width:0; }
  .chat-bottom { padding-bottom:max(10px, env(safe-area-inset-bottom)); }

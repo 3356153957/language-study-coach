@@ -18,6 +18,6 @@ export default defineConfig({
     configureServer: attachAPI,
     configurePreviewServer: attachAPI,
   }],
-  server: { host: '127.0.0.1', port: 5173, strictPort: true, fs: { deny: ['.local/**', '**/.local/**', '.env', '.env.*', '*.{crt,pem}'] } },
+  server: { host: '127.0.0.1', port: 5173, strictPort: true, watch: { ignored: ['**/build/**', '**/.local/**', '**/output/**', '**/artifacts/**'] }, fs: { deny: ['.local/**', '**/.local/**', '.env', '.env.*', '*.{crt,pem}'] } },
   preview: { host: '127.0.0.1', port: 5173, strictPort: true },
 });

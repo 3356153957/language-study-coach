@@ -9,6 +9,8 @@ import AVFoundation
     @Published var practice=false
     @Published var goal=UserDefaults.standard.string(forKey:"native-goal") ?? "四级"
     @Published var tab=0
+    @Published var showSwitch=false
+    var pendingStart:(mode:String,goal:String,reviewID:String?,reviewQuestionIndex:Int?,recommendationID:String?,useProfileFocus:Bool)?
     let runtime:StudyRuntime
     let speech=AVSpeechSynthesizer()
     var current:J{state["sessions"].list.first(where:{!$0["finishedAt"].exists}) ?? .null}
@@ -21,14 +23,31 @@ import AVFoundation
         defer{busy=""}
         do{try await work();return true}catch{self.error=error.localizedDescription;return false}
     }
-    func start(_ mode:String,reviewID:String?=nil)async{
-        if current.exists{practice=true;return}
+    func start(_ mode:String,reviewID:String?=nil,reviewQuestionIndex:Int?=nil,recommendationID:String?=nil,useProfileFocus:Bool=false,replaceCurrent:Bool=false)async{
+        if current.exists && !replaceCurrent{
+            if current["mode"].text==mode && current["goal"].text==goal && reviewID==nil && recommendationID==nil && !useProfileFocus{practice=true;return}
+            pendingStart=(mode,goal,reviewID,reviewQuestionIndex,recommendationID,useProfileFocus);showSwitch=true;return
+        }
         guard configured else{tab=3;notice="先连接 AI，再开始练习。";return}
         await perform("正在准备第一题…"){
             var input:[String:J]=["goal":.s(goal),"mode":.s(mode),"placement":.bool(false)]
             if let id=reviewID{input["reviewId"] = .s(id)}
+            if let index=reviewQuestionIndex{input["reviewQuestionIndex"] = .n(index)}
+            if let id=recommendationID{input["recommendationId"] = .s(id)}
+            if useProfileFocus{input["useProfileFocus"] = .bool(true)}
+            if replaceCurrent && current.exists{
+                input["replaceSessionId"]=current["id"];input["draftTaskId"]=current["current"]["id"]
+                if let raw=try runtime.vault.read("native-draft"),let draft=try? J.decode(Data(raw.utf8)),draft["taskId"]==current["current"]["id"]{
+                    let values=draft["answers"].list
+                    input["draftAnswer"] = .s(values.count>1 ? J.array(values).json:values.first?.text ?? "")
+                }
+            }
             state=try await request("session/start",input);practice=true
         }
+    }
+    func switchPractice()async{
+        guard let request=pendingStart else{return};pendingStart=nil;goal=request.goal
+        await start(request.mode,reviewID:request.reviewID,reviewQuestionIndex:request.reviewQuestionIndex,recommendationID:request.recommendationID,useProfileFocus:request.useProfileFocus,replaceCurrent:true)
     }
     func speak(_ text:String,rate:Float=0.48){
         if speech.isSpeaking{speech.stopSpeaking(at:.immediate);return}
@@ -61,7 +80,9 @@ extension StudyRuntime {
             var task:[String:J]=["kind":.s("text"),"skill":.s("表达"),"level":.s("A2"),"prompt":.s("What did you prepare before dinner? \(UUID().uuidString.prefix(4))"),"passage":.s(""),"audio":.s(""),"options":.array([]),"answer":.s("I had put the plates on the table."),"hint":.s("想想提前完成的准备。"),"reason":.s("隔离原生验收样例。")]
             if mode=="写作" && context["history"].list.isEmpty{task["questions"] = .array([.object(["prompt":.s("What did you prepare?"),"options":.array([]),"answer":.s("I had put the plates on the table.")]),.object(["prompt":.s("What would you like to cook?"),"options":.array([]),"answer":.s("I would like to cook rice.")])])}
             if mode=="阅读" || mode=="听力"{task["kind"] = .s(mode=="听力" ? "listening":"choice");task["skill"] = .s(mode);task["options"] = .array([.s("On the table."),.s("On the desk.")]);task["answer"] = .s("On the table.");task["prompt"] = .s("Where are the plates? \(UUID().uuidString.prefix(4))");task[mode=="听力" ? "audio":"passage"] = .s("The plates are on the kitchen table.");task["translation"] = .s("盘子在厨房的桌子上。")}
-            let feedback:J = .object(["correct":.bool(true),"explanation":.s("隔离验收：回答已经收到。"),"suggestion":.s("I had put the plates on the table."),"weakness":.s("")])
+            let skipped=context["telemetry"]["skippedQuestions"].list.map{ $0.int }
+            let itemFeedback:[J]=context["task"]["questions"].list.enumerated().map{index,_ in .object(["correct":.bool(!skipped.contains(index)),"explanation":.s(skipped.contains(index) ? "未作答，下一轮继续巩固。":"隔离验收：本项回答已收到。"),"suggestion":.s(""),"weakness":.s(skipped.contains(index) ? "未掌握本项":"")])}
+            let feedback:J = .object(["questions":.array(itemFeedback),"correct":.bool(skipped.isEmpty),"explanation":.s("隔离验收：已保存回答和不会标记。"),"suggestion":.s(""),"weakness":.s(skipped.isEmpty ? "":"未掌握本项")])
             var output:J = .object(task)
             if system.contains("connection-test") || context["action"].text=="connection-test"{output = .object(["ok":.bool(true)])}
             else if system.contains("本次同时准备下一题"){output = .object(["feedback":feedback,"nextTask":.object(task)])}

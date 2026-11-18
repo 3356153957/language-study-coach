@@ -1,7 +1,8 @@
 // Only summaries travel with routine requests. Full rounds and mistakes are read on demand.
+import { answerCounts, roundCounts } from './answer-results.js';
 export function roundSummary(s) {
   return { id: s.id, goal: s.goal, mode: s.mode, placement: s.placement, startedAt: s.startedAt, finishedAt: s.finishedAt,
-    count: s.history.length, correct: s.history.filter(x => x.feedback.correct).length,
+    ...roundCounts(s.history), taskCount: s.history.length,
     seconds: s.history.reduce((n, x) => n + (x.activeSeconds || 0), 0) };
 }
 
@@ -31,10 +32,11 @@ export function dashboardData(state, timeZone = 'UTC', now = new Date()) {
     const s = state.sessions[i];
     totals[s.goal] ||= blank();
     for (const h of s.history) {
+      const score = answerCounts(h);
       const entryDay = h.at && new Date(h.at).getTime() >= now.getTime() - 8 * 86400000 ? day(h.at) : null;
       for (const bucket of [totals.all, totals[s.goal]]) {
-        bucket.count++; bucket.correct += Number(h.feedback.correct); bucket.seconds += h.activeSeconds || 0;
-        if (entryDay) { const d = bucket.days.find(x => x.date === entryDay); if (d) { d.count++; d.correct += Number(h.feedback.correct); d.seconds += h.activeSeconds || 0; } }
+        bucket.count += score.count; bucket.correct += score.correct; bucket.seconds += h.activeSeconds || 0;
+        if (entryDay) { const d = bucket.days.find(x => x.date === entryDay); if (d) { d.count += score.count; d.correct += score.correct; d.seconds += h.activeSeconds || 0; } }
       }
     }
     if (s.finishedAt && (perGoal[s.goal] || 0) < 5) {

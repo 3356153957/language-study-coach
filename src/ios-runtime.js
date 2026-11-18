@@ -40,9 +40,9 @@ const sync=createCloudSync({engine,defaultConfig:config.url?config:undefined,loa
 const options={compact:true,timeZone:__nativeTimeZone()};
 globalThis.studyRequest=async(path,body)=>{
   if(path==='state')return engine.view(options);
-  if(path==='profile')return engine.profile();
+  if(path==='profile')return engine.profile(options);
   if(path==='activity')return engine.activity(body?.offset || 0);
-  if(path==='review')return engine.review(body.goal,body.offset || 0);
+  if(path==='review')return engine.review(body.goal,body.offset || 0,{...options,filter:body.filter});
   if(path==='session/detail')return engine.detail(body.id);
   if(path==='data/export')return engine.backup();
   if(path==='data/preview')return engine.previewImport(body.backup);
@@ -62,7 +62,7 @@ globalThis.studyRequest=async(path,body)=>{
   if(path==='settings' && body.provider==='chatgpt' && !(await auth.status()).loggedIn)throw new AppError('请先授权 ChatGPT 账号。');
   if(path==='session/start' && body.placement)throw new AppError('请从日常练习开始。');
   const result=await engine.execute(`/api/${path}`,body || {},options);
-  if(path.startsWith('session/') || path==='data/import')sync.notifyChange();
+  if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess')sync.notifyChange();
   return result;
 };
 globalThis.studySnapshot=()=>JSON.stringify(engine.view(options));

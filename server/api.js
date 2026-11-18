@@ -57,9 +57,9 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
       }
       if (req.method === 'GET' && route === '/api/state') return send(200, engine.view(viewOptions));
       if (req.method === 'GET' && route === '/api/session/detail') return send(200, engine.detail(url.searchParams.get('id')));
-      if (req.method === 'GET' && route === '/api/profile') return send(200, engine.profile());
+      if (req.method === 'GET' && route === '/api/profile') return send(200, engine.profile(viewOptions));
       if (req.method === 'GET' && route === '/api/activity') return send(200, engine.activity(url.searchParams.get('offset')));
-      if (req.method === 'GET' && route === '/api/review') return send(200, engine.review(url.searchParams.get('goal'), url.searchParams.get('offset')));
+      if (req.method === 'GET' && route === '/api/review') return send(200, engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'), {...viewOptions,filter:url.searchParams.get('filter')}));
       if (req.method === 'GET' && route === '/api/codex/status') return send(200, await codex.status());
       if (req.method === 'GET' && route === '/api/chatgpt/status') return send(200,{...await chatgpt.status(),loginError:chatgptLoginError});
       if (req.method === 'GET' && route === '/api/chatgpt/models') return send(200,{models:await chatgpt.models()});
@@ -94,7 +94,7 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
       if (route === '/api/codex/login') return send(200, await codex.loginStart(input.type));
       if (route === '/api/codex/login/cancel') { await codex.cancelLogin(); return send(200, await codex.status()); }
       const result=await engine.execute(route, input, viewOptions);
-      if(route.startsWith('/api/session/') || route==='/api/data/import' || route==='/api/background/import') sync.notifyChange();
+      if(route.startsWith('/api/session/') || route==='/api/data/import' || route==='/api/background/import' || route==='/api/learning-plan' || route.startsWith('/api/vocabulary/') || route==='/api/exam/assess') sync.notifyChange();
       send(200,result);
     } catch (error) {
       send(error.status || 500, { error: error instanceof AppError ? error.message : '本地服务处理失败，数据未更新，请检查磁盘空间后重试。' });

@@ -63,10 +63,10 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
   return { async request(path, body) {
     const url = new URL(path, 'https://local/'); path = url.pathname.slice(1);
     if (path === 'state' && body === undefined) return engine.view({ compact, timeZone });
-    if (path === 'profile' && body === undefined) return engine.profile();
+    if (path === 'profile' && body === undefined) return engine.profile({timeZone});
     if (path === 'activity' && body === undefined) return engine.activity(url.searchParams.get('offset'));
     if (path === 'session/detail' && body === undefined) return engine.detail(url.searchParams.get('id'));
-    if (path === 'review' && body === undefined) return engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'));
+    if (path === 'review' && body === undefined) return engine.review(url.searchParams.get('goal'), url.searchParams.get('offset'), {timeZone,filter:url.searchParams.get('filter')});
     if (path === 'data/export' && body === undefined) return engine.backup();
     if (path === 'data/preview') return engine.previewImport(body.backup);
     if (path === 'app/update') return checkGitHubRelease({ fetcher: async (url, options) => {
@@ -91,7 +91,7 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'settings/models') return engine.models(body || {});
     if (path === 'settings' && body?.provider==='chatgpt' && !(await auth.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
     const result=await engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
-    if(path.startsWith('session/') || path==='data/import') sync.notifyChange();
+    if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess') sync.notifyChange();
     return result;
   },close(){sync.close();} };
 }

@@ -1,6 +1,10 @@
+import { mergeWordMarks } from './vocabulary.js';
+import { mergeAssessments } from './exam-assessment.js';
 import { validateBackup } from './backup.js';
 import { AppError } from './providers.js';
 import { sharedProfile } from './profile.js';
+import { preserveLearningPlans } from './learning-plan.js';
+import { mergeRoundReport } from './report-history.js';
 
 export const recordKey = r => `${r.kind}:${r.id}`;
 export function canonical(value) {
@@ -34,14 +38,17 @@ export function reconcile(local,remote) {
   if(!remote) return local;
   if(canonical(local.payload)===canonical(remote.payload)) return local;
   const a=local.payload,b=remote.payload;
-  if(local.kind==='profile') return (a.updatedAt || '') >= (b.updatedAt || '') ? local : remote;
+  if(local.kind==='profile') {
+    const chosen=(a.updatedAt || '') >= (b.updatedAt || '') ? local : remote;
+    return {...chosen,payload:preserveLearningPlans(chosen.payload,chosen===local ? b : a)};
+  }
   if(local.kind==='background') return (a.importedAt || '') >= (b.importedAt || '') ? local : remote;
   if(a.goal!==b.goal || a.mode!==b.mode || a.startedAt!==b.startedAt) return null;
   const shorter=a.history.length<=b.history.length?a.history:b.history,longer=shorter===a.history?b.history:a.history;
   if(!shorter.every((e,i)=>canonical(e)===canonical(longer[i]))) return null;
   // Keep the exercise being answered on its original device. Concurrent edits
   // of a manually copied active round need review instead of silent overwrite.
-  if(!a.finishedAt && canonical({...a,discussions:null})!==canonical({...b,discussions:null})) return null;
+  if(!a.finishedAt && canonical({...a,discussions:null,wordMarks:null,examAssessments:null})!==canonical({...b,discussions:null,wordMarks:null,examAssessments:null})) return null;
   if(a.finishedAt && !b.finishedAt && b.history.length>a.history.length) return null;
   const chosen=a.history.length>b.history.length?local:b.history.length>a.history.length?remote:a.finishedAt?local:remote;
   const discussions={};
@@ -50,7 +57,9 @@ export function reconcile(local,remote) {
     for(const t of turns) {if(map.has(t.id) && canonical(map.get(t.id))!==canonical(t)) return null;map.set(t.id,t);}
     discussions[taskId]=[...map.values()].sort((x,y)=>x.at.localeCompare(y.at)||x.id.localeCompare(y.id));
   }
-  return validateRecord({...chosen,payload:{...chosen.payload,discussions}});
+  const payload=a.history.length===b.history.length ? mergeRoundReport(chosen.payload,chosen===local ? b : a) : chosen.payload;
+  const wordMarks=mergeWordMarks(a.wordMarks,b.wordMarks),examAssessments=mergeAssessments(a.examAssessments,b.examAssessments);
+  return validateRecord({...chosen,payload:{...payload,discussions,...(wordMarks.length?{wordMarks}:{}),...(examAssessments.length?{examAssessments}:{})}});
 }
 
 export function mergeCloudRecords(state,records) {
@@ -63,11 +72,12 @@ export function mergeCloudRecords(state,records) {
       const index=positions.get(r.id);
       if(index===undefined){positions.set(r.id,sessions.length);sessions.push(r.payload);}
       else if(sessions[index].finishedAt) {
-        const merged=reconcile({kind:'round',id:r.id,payload:sessions[index]},r);
+        const merged=reconcile(validateRecord({kind:'round',id:r.id,payload:sessions[index]}),r);
         if(merged) sessions[index]=merged.payload;
       }
     } else if(r.kind==='profile') {
-      if(!profile || (r.payload.updatedAt || '')>(profile.updatedAt || '')) profile=r.payload;
+      const chosen=!profile || (r.payload.updatedAt || '')>(profile.updatedAt || '') ? r.payload : profile;
+      profile=preserveLearningPlans(chosen,chosen===profile ? r.payload : profile);
     } else {
       const index=backgrounds.findIndex(b=>`${b.source.threadId}:${b.goal}`===r.id);
       if(index<0)backgrounds.push(r.payload);

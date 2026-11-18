@@ -65,6 +65,35 @@ final class NativeUITests:XCTestCase {
         XCTAssertTrue(app.buttons["next-task"].waitForExistence(timeout:15));capture(app,"03-native-feedback")
         app.buttons["next-task"].tap();XCTAssertTrue(app.textViews["answer-0"].waitForExistence(timeout:10))
     }
+    func revealPracticeControl(_ element:XCUIElement,in app:XCUIApplication){
+        let scroll=app.scrollViews["practice-log"]
+        XCTAssertTrue(scroll.exists)
+        func visible()->Bool{element.exists && element.isHittable && element.frame.minY>=scroll.frame.minY+4 && element.frame.maxY<=scroll.frame.maxY-4}
+        for _ in 0..<6{if visible(){break};scroll.swipeUp()}
+        XCTAssertTrue(visible(),"Practice control must be inside the scroll area, above the fixed composer")
+    }
+    func testSkipOneQuestionAndInspectRegradeHistory(){
+        let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
+        app.buttons["start-写作"].tap()
+        let first=app.textViews["answer-0"]
+        XCTAssertTrue(first.waitForExistence(timeout:15));first.tap();first.typeText("I prepared the plates.")
+        let dismiss=app.buttons["收起键盘"];if dismiss.exists{dismiss.tap()}
+        let skip=app.buttons["skip-1"]
+        for _ in 0..<5{if skip.isHittable{break};app.swipeUp()}
+        XCTAssertTrue(skip.isHittable);skip.tap()
+        XCTAssertTrue(app.buttons["send-answer"].isEnabled);app.buttons["send-answer"].tap()
+        XCTAssertTrue(app.buttons["next-task"].waitForExistence(timeout:15))
+        XCTAssertTrue(app.staticTexts["本组答对 1 / 2 小题"].exists)
+        capture(app,"11-native-skipped-question")
+        let regrade=app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@","regrade-")).firstMatch
+        revealPracticeControl(regrade,in:app);regrade.tap()
+        let revised=NSPredicate{_,_ in regrade.label.contains("1/3")}
+        expectation(for:revised,evaluatedWith:regrade);waitForExpectations(timeout:15)
+        let history=app.descendants(matching:.any).matching(NSPredicate(format:"identifier BEGINSWITH %@","revision-history-")).firstMatch
+        XCTAssertTrue(history.waitForExistence(timeout:15));revealPracticeControl(history,in:app);history.tap()
+        XCTAssertTrue(app.staticTexts["复核前"].exists);XCTAssertTrue(app.staticTexts["复核后"].exists)
+        capture(app,"12-native-regrade-history")
+    }
     func testWrongOTPHasInlineError(){
         let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
         app.tabBars.buttons["设置"].tap()
@@ -82,6 +111,19 @@ final class NativeUITests:XCTestCase {
         app.buttons["verify-code"].tap()
         XCTAssertTrue(app.buttons["开启自动同步"].waitForExistence(timeout:10));XCTAssertFalse(error.exists);capture(app,"05-native-otp-corrected")
     }
+    func testNewlineAndNextAnswerButtonsKeepSeparateDrafts(){
+        let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
+        app.buttons["start-写作"].tap()
+        let first=app.textViews["answer-0"],second=app.textViews["answer-1"]
+        XCTAssertTrue(first.waitForExistence(timeout:15));first.tap();first.typeText("First line")
+        let newline=app.buttons["insert-newline"],next=app.buttons["next-answer-field"]
+        XCTAssertTrue(newline.waitForExistence(timeout:5));newline.tap();first.typeText("Second line")
+        XCTAssertEqual(first.value as? String,"First line\nSecond line")
+        XCTAssertTrue(next.exists);next.tap();second.typeText("Separate answer")
+        XCTAssertEqual(second.value as? String,"Separate answer")
+        XCTAssertFalse(app.buttons["next-task"].exists)
+        capture(app,"10-native-newline-next-field")
+    }
     func testLandscapeKeyboardKeepsAnswerVisibleWithoutWebContent(){
         let app=XCUIApplication();app.launchArguments=["--ui-testing"];app.launch()
         app.buttons["start-写作"].tap()
@@ -90,8 +132,14 @@ final class NativeUITests:XCTestCase {
         defer{XCUIDevice.shared.orientation = .portrait}
         first.tap();first.typeText("I had prepared the plates.")
         let keyboard=app.keyboards.firstMatch;XCTAssertTrue(keyboard.waitForExistence(timeout:5))
-        let visible=NSPredicate{_,_ in app.frame.width>app.frame.height && first.isHittable && first.frame.width>0 && first.frame.height>0 && first.frame.minX>=app.frame.minX && first.frame.maxX<=app.frame.maxX && first.frame.minY>=app.navigationBars.firstMatch.frame.maxY && first.frame.maxY<=keyboard.frame.minY}
-        expectation(for:visible,evaluatedWith:first);waitForExpectations(timeout:5)
+        // Each frame access requests an accessibility snapshot. Read each once so
+        // a slow simulator can finish one complete comparison before the deadline.
+        let visible=NSPredicate{_,_ in
+            guard keyboard.exists,first.isHittable else{return false}
+            let bounds=app.frame,answer=first.frame,keys=keyboard.frame,bar=app.navigationBars.firstMatch.frame
+            return bounds.width>bounds.height && answer.width>0 && answer.height>0 && answer.minX>=bounds.minX && answer.maxX<=bounds.maxX && answer.minY>=bar.maxY && answer.maxY<=keys.minY
+        }
+        expectation(for:visible,evaluatedWith:first);waitForExpectations(timeout:15)
         XCTAssertEqual(first.value as? String,"I had prepared the plates.")
         print("Landscape bounds: app=\(app.frame), answer=\(first.frame), keyboard=\(keyboard.frame)")
         XCTAssertEqual(app.webViews.count,0);capture(app,"06-native-landscape-keyboard")

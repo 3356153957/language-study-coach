@@ -1,4 +1,5 @@
 import { skills, validateExamEstimate } from './coach.js';
+import { independentCounts } from './answer-results.js';
 
 // Retain legacy goal profiles as source records, but expose one learner profile.
 export function sharedProfile(state) {
@@ -15,15 +16,16 @@ export function examEvidence(state, goal) {
     if (round.goal !== goal || round.placement || !round.history.length) continue;
     for (let j = round.history.length - 1; j >= 0 && entries.length < 60; j--) entries.push(round.history[j]);
   }
-  const independent = entries.filter(e => !e.hintUsed && !e.transcriptViewed);
-  const skillCounts = Object.fromEntries(['阅读', '听力', '表达'].map(skill => [skill, independent.filter(e => e.task.skill === skill).length]));
+  const independent = entries.filter(e => independentCounts(e).count > 0);
+  const count = independent.reduce((n, entry) => n + independentCounts(entry).count, 0);
+  const skillCounts = Object.fromEntries(['阅读', '听力', '表达'].map(skill => [skill, independent.filter(e => e.task.skill === skill).reduce((n, entry) => n + independentCounts(entry).count, 0)]));
   const covered = Object.keys(skillCounts).filter(skill => skillCounts[skill] >= 3);
-  const countProgress = Math.min(1, independent.length / 20);
+  const countProgress = Math.min(1, count / 20);
   const skillProgress = Math.min(1, ...Object.values(skillCounts).map(count => count / 3));
-  return { count: independent.length, requiredCount: 20, skillCounts, covered,
+  return { count, requiredCount: 20, skillCounts, covered,
     progress: Math.round(Math.min(countProgress, skillProgress) * 100),
-    ready: independent.length >= 20 && covered.length === 3,
-    requirement: '至少 20 道无提示作答，阅读、听力、表达各至少 3 道；这只是生成初步估计的最低样本要求。' };
+    ready: count >= 20 && covered.length === 3,
+    requirement: '至少 20 道无提示作答的小题，阅读、听力、表达各至少 3 道；标记不会的小题不计入。这里只是初步估计的最低样本要求。' };
 }
 
 export function examOutlook(state) {
@@ -36,6 +38,7 @@ export function examOutlook(state) {
     const reportTime = round => timestamp(round.report?.updatedAt || round.finishedAt);
     const reports = rounds.filter(round => round.finishedAt && round.report).sort((a, b) => reportTime(b) - reportTime(a));
     const candidates = reports.map(round => ({ value: validateExamEstimate(round.report.examEstimate), time: reportTime(round) })).filter(c => c.value);
+    for (const round of rounds) for (const item of round.examAssessments || []) { const value=validateExamEstimate(item); if(value) candidates.push({value,time:timestamp(item.updatedAt)}); }
     const cache = { value: validateExamEstimate(state.examEstimates?.[goal]), time: timestamp(state.examEstimates?.[goal]?.updatedAt) };
     // Cache and report normally describe the same event (older releases wrote
     // finishedAt milliseconds later). Never show that duplicate as a new change.
@@ -46,30 +49,17 @@ export function examOutlook(state) {
       const value = candidate.value, legacy = !Object.hasOwn(value, 'probability');
       const probability = legacy ? (value.low + value.high) / 2 : value.probability;
       return { ...value, probability, probabilityText: probability.toFixed(2) + '%',
-        sourceNote: legacy ? '沿用历史区间中点，待下次学习小结更新。' : '',
+        sourceNote: legacy ? '沿用历史区间中点，点击 AI 评估可更新。' : '',
         updatedAt: candidate.time ? new Date(candidate.time).toISOString() : null };
     };
     const current = candidates[0], estimate = present(current);
     const previous = current?.time ? present(candidates.find(c => c.time > 0 && c.time < current.time)) : null;
     const change = previous ? Math.round((estimate.probability - previous.probability) * 100) / 100 : null;
     const changeText = change === null ? '' : change === 0 ? '较上次持平' : `较上次 ${change > 0 ? '+' : '−'}${Math.abs(change).toFixed(2)} 个百分点`;
-    const latest = reports[0];
-    const pending = !latest || rounds.some(round => round.history.length && !round.report && (!round.finishedAt || timestamp(round.finishedAt) > reportTime(latest)));
-    const declined = latest && !validateExamEstimate(latest.report.examEstimate) && reportTime(latest) >= timestamp(estimate?.updatedAt);
-    let status, statusText, message;
-    if (estimate) {
-      status = !evidence.ready || pending || declined ? 'historical' : 'estimated';
-      statusText = '最近一次预测';
-      message = !evidence.ready ? '保留历史预测。最近的独立作答还需补足阅读、听力与表达，才能重新估计。'
-        : pending ? `已有新的练习依据，完成${goal}学习小结后尝试更新预测。`
-        : declined ? '本轮未给出有效的新预测，保留上次预测。继续练习考试相关材料后再更新。' : '每次完成该目标的学习小结后，会根据新增表现尝试更新。';
-    } else if (!evidence.ready) {
-      status = 'collecting'; statusText = '预测依据积累中'; message = evidence.requirement;
-    } else if (pending) {
-      status = 'awaiting_summary'; statusText = '等待学习小结'; message = `已满足最低样本要求。完成${goal}学习小结后，AI 会尝试生成通过率预测。`;
-    } else {
-      status = 'no_estimate'; statusText = '暂未形成预测'; message = '最低样本已满足，但最近小结未给出有效预测。继续练习考试相关的阅读、听力和写作，再完成学习小结。';
-    }
-    return [goal, { ...evidence, estimate, previous, change, changeText, status, statusText, message }];
+    const canAssess = evidence.count > 0;
+    const status = estimate ? evidence.ready ? 'estimated' : 'historical' : canAssess ? 'ready' : 'collecting';
+    const statusText = estimate ? '最近一次评估' : canAssess ? '点击 AI 评估' : '先积累练习记录';
+    const message = canAssess ? `${estimate ? '保留上次评估。' : ''}点击后由 AI 分析已有练习，不随学习小结自动更新。${evidence.ready ? '' : '目前样本较少，结果仅是初步估计。'}` : '先完成至少一道该目标下的无提示练习，再点击 AI 评估。';
+    return [goal, { ...evidence, canAssess, estimate, previous, change, changeText, status, statusText, message }];
   }));
 }

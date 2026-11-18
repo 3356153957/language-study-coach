@@ -44,7 +44,7 @@ function harness({stores=new Map(),http,native}={}) {
         if(http){const value=await http(input);if(value){context.nativeDeliver(id,JSON.stringify(value),'');return;}}
         let body={},status=200;
         if(input.url.includes('/auth/v1/verify')){const token=JSON.parse(input.body).token;if(token!=='123456')status=400;else body={access_token:'test-token',refresh_token:'test-refresh',expires_in:3600,user:{id:'test-user',email:'qa@example.com'}};}
-        else if(input.url.endsWith('/chat/completions')){const request=JSON.parse(input.body),system=request.messages[0].content;body={choices:[{message:{content:JSON.stringify(system.includes('本次同时准备下一题')?{feedback:{correct:true,explanation:'准确。',suggestion:'I prepared the plates.',weakness:''},nextTask:{...question,prompt:'What will you do after dinner?'}}:question)}}]};}
+        else if(input.url.endsWith('/chat/completions')){const request=JSON.parse(input.body),system=request.messages[0].content;body={choices:[{message:{content:JSON.stringify(system.includes('本次同时准备下一题')?{feedback:{correct:true,explanation:'准确。',suggestion:'I prepared the plates.',weakness:'',questions:question.questions.map(()=>({correct:true,explanation:'准确。',suggestion:'',weakness:''}))},nextTask:{...question,prompt:'What will you do after dinner?'}}:question)}}]};}
         context.nativeDeliver(id,JSON.stringify({status,body:JSON.stringify(body),headers:{}}),'');
       } catch(e) { context.nativeDeliver(id,'null',e.message); }
     })
@@ -52,6 +52,22 @@ function harness({stores=new Map(),http,native}={}) {
   let startupError;try{vm.runInContext(bundle,context);}catch(error){startupError=error;}
   return {request:context.studyRequest,context,stores,calls,cancelled,timers,startupError,set failWrites(value){failWrites=value;},close(){for(const timer of timers.values())clearTimeout(timer);}};
 }
+test('SwiftUI wordbook and manual assessment survive restart through the native bridge',async()=>{
+  const h=harness({http:async input=>input.url.endsWith('/chat/completions') ? {status:200,headers:{},body:JSON.stringify({choices:[{message:{content:JSON.stringify({probability:12.23,reason:'原生引擎验收，样本存在局限。'})}}]})} : null});
+  let restarted;
+  try{
+    await h.request('data/import',{backup:exportBackup(predictionFixture())});
+    await h.request('settings',{provider:'compatible',baseURL:'https://fixture.invalid/v1',apiKey:'test-only',model:'fixture'});
+    let state=await h.request('vocabulary/mark',{sessionId:'round-0',taskId:'task-entry-0-0',word:'plates',status:'learning'});
+    assert.equal(state.wordbook[0].word,'plates');
+    state=await h.request('exam/assess',{goal:'四级',requestId:crypto.randomUUID()});
+    assert.equal(state.examOutlook['四级'].estimate.probabilityText,'12.23%');
+    restarted=harness({stores:h.stores});
+    const restored=await restarted.request('state');
+    assert.equal(restored.wordbook[0].word,'plates');assert.equal(restored.examOutlook['四级'].estimate.probabilityText,'12.23%');
+  }finally{h.close();restarted?.close();}
+});
+
 test('SwiftUI headless engine runs without DOM, preserves multi-answer grading and prepared tasks',async()=>{
   const h=harness();try{
     await h.request('settings',{provider:'compatible',baseURL:'https://fixture.invalid/v1',apiKey:'private-key',model:'fixture'});

@@ -1,3 +1,4 @@
+import { assessmentPrompt } from '../server/exam-assessment.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sharedProfile, examOutlook } from '../server/profile.js';
@@ -52,15 +53,15 @@ test('latest valid archived prediction wins over stale cache and newer empty rep
   assert.deepEqual(state, before);
 });
 
-test('eligible samples distinguish waiting for a summary from a summary without a valid estimate', () => {
+test('eligible samples offer manual assessment both before and after a summary', () => {
   const history = Array.from({ length: 24 }, (_, i) => ({ task: { skill: ['阅读', '听力', '表达'][i % 3] } }));
   const round = { goal: '六级', history };
   const state = { sessions: [round] };
-  assert.equal(examOutlook(state)['六级'].status, 'awaiting_summary');
-  assert.match(examOutlook(state)['六级'].message, /六级.*小结/);
+  assert.equal(examOutlook(state)['六级'].status, 'ready');
+  assert.match(examOutlook(state)['六级'].message, /点击后由 AI/);
   round.finishedAt = '2026-11-16'; round.report = { examEstimate: null };
-  assert.equal(examOutlook(state)['六级'].status, 'no_estimate');
-  assert.match(examOutlook(state)['六级'].message, /未给出有效预测/);
+  assert.equal(examOutlook(state)['六级'].status, 'ready');
+  assert.match(examOutlook(state)['六级'].message, /不随学习小结自动更新/);
   assert.equal(examOutlook(state)['四级'].status, 'collecting');
 });
 
@@ -77,7 +78,8 @@ test('point predictions accept decimals, normalize precision and reject invalid 
     assert.equal(validateExamEstimate({ probability, low: 30, high: 60, reason: '依据' }), null);
   }
   assert.equal(validateExamEstimate({ probability: 12.23, reason: ' ' }), null);
-  assert.match(prompts.report, /probability.*两位小数/);
+  assert.match(assessmentPrompt, /probability.*两位小数/);
+  assert.match(prompts.report, /examEstimate 必须为 null/);
   assert.doesNotMatch(prompts.report, /区间至少宽20/);
 });
 

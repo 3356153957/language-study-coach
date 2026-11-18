@@ -37,6 +37,42 @@ test('switching goals reuses one learner profile and cross-goal history; a new r
   assert.deepEqual((await restored.request('state')).body.profile, result.body.profile);
 });
 
+test('live evidence survives when the next question tests another skill', async t => {
+  const reading = { ...task(2), skill: '阅读', passage: 'Mia reads every morning.', prompt: 'When does Mia read?' };
+  const h = await harness(t, async (cfg, prompt) => {
+    if (prompt === prompts.next) return task(1);
+    if (prompt === prompts.report) return report;
+    return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: reading };
+  });
+  await h.request('settings', config);
+  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' });
+  s = result.body.sessions[0];
+  assert.equal(result.body.profile.skills.find(x => x.name === '语法').level, '练习中');
+  s = (await h.request('session/next', { sessionId: s.id, taskId: s.current.id })).body.sessions[0];
+  result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' });
+  assert.equal(result.body.profile.skills.find(x => x.name === '语法').level, '练习中');
+  assert.equal(result.body.profile.skills.find(x => x.name === '阅读').level, '练习中');
+});
+
+test('a failed learning summary still closes the round and allows a new round', async t => {
+  let failReport = true;
+  const h = await harness(t, async (cfg, prompt) => {
+    if (prompt === prompts.next) return task(1);
+    if (prompt === prompts.report && failReport) throw new AppError('上游暂时不可用', 502);
+    if (prompt === prompts.report) return report;
+    return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: task(2) };
+  });
+  await h.request('settings', config);
+  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  s = (await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' })).body.sessions[0];
+  const finished = await h.request('session/finish', { sessionId: s.id });
+  assert.equal(finished.status, 200);
+  assert.ok(finished.body.sessions[0].finishedAt);
+  assert.match(finished.body.sessions[0].reportError, /上游暂时不可用/);
+  assert.equal((await h.request('session/start', { goal: '日常英语', mode: '综合' })).status, 200);
+});
+
 test('follow-up clarification persists without regrading or consuming the prepared next task', async t => {
   const calls = [];
   const writing = { ...task(1), kind: 'text', skill: '表达', options: [], answer: 'Hidden sample.' };
@@ -373,7 +409,7 @@ test('open multi-question writing uses one answer box per prompt and accepts JSO
     { prompt: 'What did you do yesterday?', options: [], answer: 'I went shopping.' },
     { prompt: 'Why did you do it?', options: [], answer: 'I needed vegetables.' },
   ] };
-  const h = await harness(t, async (cfg, prompt) => prompt === prompts.next ? grouped : { feedback: { correct: true, explanation: '两部分都表达清楚了。', suggestion: '', weakness: '' }, nextTask: { ...task(9), prompt: 'A different next task.' } });
+  const h = await harness(t, async (cfg, prompt) => prompt === prompts.next ? grouped : { feedback: { correct: true, explanation: '两部分都表达清楚了。', suggestion: '', weakness: '', questions: grouped.questions.map(()=>({correct:true,explanation:'该项表达清楚。',suggestion:'',weakness:''})) }, nextTask: { ...task(9), prompt: 'A different next task.' } });
   await h.request('settings', config);
   const s = (await h.request('session/start', { goal: '日常英语', mode: '写作' })).body.sessions[0];
   const answer = JSON.stringify(['I went shopping.', 'I needed vegetables.']);

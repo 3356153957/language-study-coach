@@ -1,3 +1,4 @@
+import { renderWordbook } from './reading-words.js';
 import { questionAnswers, updateQuestionAnswer } from './answer-input.js';
 import { roundCounts } from '../server/answer-results.js';
 import { renderAnswerReview } from './answer-review.js';
@@ -5,7 +6,7 @@ import { createDraftStore } from './draft-store.js';
 
 import './style.css';
 import './dashboard.css';
-import { renderDashboard, renderProfile, renderActivity, renderPractice } from './dashboard.js';
+import { renderDashboard, renderProfile, renderActivity, renderPractice, renderExamAssessment } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
 const deviceBridge = registerPlugin('StudyDevice');
@@ -34,6 +35,7 @@ let busy = '', error = '', notice = '', settingsDraft = null, summaryId = null, 
 let detailSession = null, reviewData = null, reviewOffset = 0;
 let reviewFilter = 'all';
 let activityData = null, practiceMode = '听力';
+let wordQuery = '', wordFilter = 'learning', examGoal = '四级', examRequestId = null;
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
@@ -231,7 +233,7 @@ async function automaticSync() {
     syncStatus=await request('sync/status');
     if(syncStatus.enabled) {
       const result=await request('sync/run',{});syncStatus=result.status;
-      if(!busy && before===data && result.state) {data=result.state;syncDraft();if(['home','welcome','profile'].includes(screen))render();}
+      if(!busy && before===data && result.state) {data=result.state;syncDraft();if(['home','welcome','profile','wordbook','exam'].includes(screen))render();}
     }
     paintSync();
   } catch { /* Local practice continues; the next foreground/online event retries. */ }
@@ -276,6 +278,7 @@ function navigate(target) {
     window.scrollTo({ top: 0, behavior: 'instant' });
     return run('正在读取错题…', async () => { reviewData = await request(`review?goal=${encodeURIComponent(goal)}&offset=0&filter=${reviewFilter}`); });
   }
+  if (target === 'wordbook') { render(); return fillWordMeanings(); }
   if (target === 'profile') {
     return run('正在读取能力详情…', async () => { const profile = await request('profile'); data = { ...data, ...profile }; });
   }
@@ -288,15 +291,20 @@ function navigate(target) {
   }
   render(); if (target === 'settings') autoFetchModels(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+async function fillWordMeanings(word) {
+  const words=word ? [word] : (data.wordbook || []).filter(item=>!item.meaning).slice(0,8).map(item=>item.word);
+  if(!data.configured || !words.length || busy)return;
+  await run('正在生成中文释义，生词已保存…',()=>api('vocabulary/define',{words}));
+}
 function selectGoal(value) { goal = value; localStorage.setItem('lsc-goal-v1', goal); navigate('home'); }
 function render() {
   document.documentElement.classList.toggle('is-practicing', screen === 'session');
-  const navScreen = ['activity','week','summary','practice'].includes(screen) ? 'home' : screen;
+  const navScreen = ['activity','week','summary','practice','exam'].includes(screen) ? 'home' : screen;
   const previousLog = app.querySelector('#chat-log');
   const previousScroll = previousLog?.scrollTop || 0;
   const nearEnd = !previousLog || previousLog.scrollHeight - previousScroll - previousLog.clientHeight < 100;
   app.innerHTML = `<div class="shell ${screen === 'session' ? 'session-shell' : ''}"><header class="topbar">
-    <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['settings','设置']].map(([key, label]) => button(icon({home:'read',profile:'target',review:'history',settings:'settings'}[key]) + label, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
+    <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['wordbook','单词本'],['settings','设置']].map(([key, label]) => button(icon({home:'read',profile:'target',review:'history',wordbook:'words',settings:'settings'}[key]) + label, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
     </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
@@ -311,11 +319,13 @@ function render() {
     // The first prompt should start at its top. Later turns stay anchored to the
     // newest message so the learner sees feedback and the prepared next task.
     const firstPrompt = !current()?.history?.length && !pendingChat;
-    log.scrollTop = firstPrompt ? 0 : (chatScrollToEnd || nearEnd ? log.scrollHeight : previousScroll);
+    log.scrollTop = firstPrompt && !previousLog ? 0 : (chatScrollToEnd || nearEnd ? log.scrollHeight : previousScroll);
     chatScrollToEnd = false;
   }
 }
 function page() {
+  if (screen === 'wordbook') return renderWordbook({data,esc,button,query:wordQuery,filter:wordFilter});
+  if (screen === 'exam') return renderExamAssessment({data,goal:examGoal,esc,button});
   if (screen === 'settings') return settings();
   if (screen === 'profile') return renderProfile({ data, goal, esc, button });
   if (screen === 'activity' || screen === 'week') return renderActivity({ data, activity: activityData, week: screen === 'week', esc, button, date, duration });
@@ -510,14 +520,27 @@ app.addEventListener('click', async event => {
     if(authStatus.loggedIn)authModels=(await request('chatgpt/models')).models;
     if(settingsDraft)settingsDraft.model='';notice=authStatus.message || 'ChatGPT 账号已更新。';
   });
-  if (['home','welcome','settings','review','session','profile','activity','week'].includes(action)) return navigate(action);
+  if (['home','welcome','settings','review','session','profile','activity','week','wordbook'].includes(action)) return navigate(action);
   if (action === 'practice') { practiceMode = el.dataset.mode; return navigate('practice'); }
-  if (action === 'exam') {
-    const examGoal = el.dataset.goal;
-    await navigate('profile');
-    const details = [...app.querySelectorAll('[data-exam]')].find(x => x.dataset.exam === examGoal);
-    if (details) { details.open = true; details.scrollIntoView({ block: 'center', behavior: 'smooth' }); details.querySelector('summary').focus({ preventScroll: true }); }
-    return;
+  if (action === 'exam') { examGoal = el.dataset.goal || goal; examRequestId=null; return navigate('exam'); }
+  if (action === 'exam-assess') {
+    if (!data.configured) return navigate('settings');
+    examRequestId ||= crypto.randomUUID();
+    return run('AI 正在分析练习记录，评估通过率…', async () => {
+      await api('exam/assess',{goal:examGoal,requestId:examRequestId});examRequestId=null;
+      notice='评估已更新，结果和依据已保存。';
+    });
+  }
+  if (action === 'mark-word') {
+    const scroll=app.querySelector('#chat-log')?.scrollTop, top=window.scrollY;
+    await run('正在保存单词…',()=>api('vocabulary/mark',{sessionId:el.dataset.id,taskId:el.dataset.task,word:el.dataset.word,status:el.dataset.status}));
+    const log=app.querySelector('#chat-log');if(log && scroll!==undefined)log.scrollTop=scroll;window.scrollTo({top,behavior:'instant'});return;
+  }
+  if (action === 'word-define') return fillWordMeanings(el.dataset.word);
+  if (action === 'word-status') return run('正在更新单词本…',()=>api('vocabulary/status',{word:el.dataset.word,status:el.dataset.status}));
+  if (action === 'word-source') {
+    if(current()?.id===el.dataset.id) return navigate('session');
+    summaryId=el.dataset.id;screen='summary';return run('正在读取原文…',async()=>{detailSession=await request(`session/detail?id=${encodeURIComponent(summaryId)}`);});
   }
   if (['activity-next','activity-prev','activity-retry'].includes(action)) {
     const offset = Math.max(0, (activityData?.offset || 0) + (action === 'activity-next' ? 20 : action === 'activity-prev' ? -20 : 0));
@@ -620,6 +643,7 @@ app.addEventListener('click', async event => {
   });
 });
 app.addEventListener('input', event => {
+  if(event.target.id==='wordbook-search'){wordQuery=event.target.value;const fragment=document.createElement('div');fragment.innerHTML=renderWordbook({data,esc,button,query:wordQuery,filter:wordFilter});app.querySelector('.wordbook-list')?.replaceWith(fragment.querySelector('.wordbook-list'));return;}
   if(event.target.closest('#sync-panel') && event.target.name) syncFields[event.target.name]=event.target.value;
   if (event.target.classList.contains('task-text-answer')) {
     let values; try { values = JSON.parse(draft.answer || '[]'); } catch { values = []; }
@@ -649,6 +673,7 @@ app.addEventListener('input', event => {
   }
 });
 app.addEventListener('change', event => {
+  if(event.target.id==='wordbook-filter'){wordFilter=event.target.value;return render();}
   if (event.target.closest('#settings-form') && ['baseURL','apiKey'].includes(event.target.name)) autoFetchModels();
   if (event.target.name === 'model') settingsDraft = {...settingsDraft,model:event.target.value};
   if(event.target.id==='backup-file') {
