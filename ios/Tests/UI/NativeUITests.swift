@@ -1,7 +1,7 @@
 import XCTest
 
 final class NativeUITests:XCTestCase {
-    func launchExamFixture(withEstimate:Bool,withDecimalChange:Bool=false)->XCUIApplication{
+    func launchExamFixture(withEstimate:Bool,withDecimalChange:Bool=false,withWordbook:Bool=false)->XCUIApplication{
         let file=Bundle(for:Self.self).url(forResource:"exam-backup",withExtension:"json")!
         let backup=try! JSONSerialization.jsonObject(with:Data(contentsOf:file)) as! [String:Any]
         var state=backup["data"] as! [String:Any];state["version"]=1
@@ -19,6 +19,11 @@ final class NativeUITests:XCTestCase {
             var latest=sessions[sessions.count-1]["report"] as! [String:Any]
             latest["examEstimate"]=["probability":12.23,"reason":"新增作答后的初步估计"]
             sessions[sessions.count-1]["report"]=latest;state["sessions"]=sessions
+        }
+        if withWordbook{
+            var sessions=state["sessions"] as! [[String:Any]]
+            sessions[0]["wordMarks"]=[["taskId":"task-entry-0-0","word":"plates","status":"learning","updatedAt":"2026-11-18T10:00:00.000Z","meaning":"盘子；餐盘","translation":"盘子在桌子上。","definedAt":"2026-11-18T10:00:00.000Z"]]
+            state["sessions"]=sessions
         }
         let app=XCUIApplication();app.launchArguments=["--ui-testing"]
         app.launchEnvironment["LSC_UI_TEST_STATE"]=String(data:try! JSONSerialization.data(withJSONObject:state),encoding:.utf8)!
@@ -48,9 +53,30 @@ final class NativeUITests:XCTestCase {
     func testEligibleSamplesWithoutEstimateExplainNextStep(){
         let app=launchExamFixture(withEstimate:false);openExam(app)
         let status=app.staticTexts["exam-status"]
-        XCTAssertTrue(status.waitForExistence(timeout:10));XCTAssertEqual(status.label,"暂未形成预测")
-        XCTAssertTrue(app.staticTexts["exam-message"].label.contains("最低样本已满足"))
+        XCTAssertTrue(status.waitForExistence(timeout:10));XCTAssertEqual(status.label,"点击 AI 评估")
+        XCTAssertTrue(app.staticTexts["exam-message"].label.contains("点击后由 AI"))
+        XCTAssertTrue(app.buttons["assess-exam"].isEnabled)
         capture(app,"08-native-prediction-pending")
+    }
+    func testManualAssessmentUpdatesOnlyAfterTap(){
+        let app=launchExamFixture(withEstimate:false);openExam(app)
+        XCTAssertFalse(app.staticTexts["exam-estimate"].exists)
+        let assess=app.buttons["assess-exam"]
+        XCTAssertTrue(assess.waitForExistence(timeout:10));assess.tap()
+        let estimate=app.staticTexts["exam-estimate"]
+        XCTAssertTrue(estimate.waitForExistence(timeout:15));XCTAssertEqual(estimate.label,"12.23%")
+        capture(app,"13-native-manual-assessment")
+    }
+    func testWordbookShowsChineseAndSupportsChineseSearch(){
+        let app=launchExamFixture(withEstimate:true,withWordbook:true)
+        app.tabBars.buttons["单词本"].tap()
+        XCTAssertTrue(app.staticTexts["盘子；餐盘"].waitForExistence(timeout:15))
+        XCTAssertTrue(app.staticTexts["盘子在桌子上。"].exists)
+        let search=app.searchFields.firstMatch
+        XCTAssertTrue(search.exists);search.tap();search.typeText("盘子")
+        XCTAssertTrue(app.staticTexts["plates"].exists)
+        if app.buttons["Search"].exists{app.buttons["Search"].tap()}
+        capture(app,"14-native-chinese-wordbook")
     }
     func capture(_ app:XCUIApplication,_ name:String){let shot=XCTAttachment(screenshot:XCUIScreen.main.screenshot());shot.name=name;shot.lifetime = .keepAlways;add(shot)}
     func testNativeKeyboardMultiAnswerAndFeedback(){

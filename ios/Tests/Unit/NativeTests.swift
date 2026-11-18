@@ -40,6 +40,22 @@ import CryptoKit
         let result=try await runtime.request("sync/verify",.object(["email":.s("qa@example.com"),"code":.s("123456")]))
         XCTAssertTrue(result["status"]["connected"].flag)
     }
+    func testNativeWordbookDefinitionsAndManualAssessmentStayPortable()async throws{
+        let runtime=StudyRuntime(fixture:true)
+        var state=try await runtime.request("session/start",.object(["goal":.s("四级"),"mode":.s("阅读")]))
+        let session=state["sessions"].list[0],task=session["current"]
+        state=try await runtime.request("vocabulary/mark",.object(["sessionId":session["id"],"taskId":task["id"],"word":.s("plates"),"status":.s("learning")]))
+        XCTAssertEqual(state["wordbook"].list.count,1)
+        state=try await runtime.request("vocabulary/define",.object(["words":.array([.s("plates")])]))
+        XCTAssertEqual(state["wordbook"].list[0]["meaning"].text,"盘子；餐盘")
+        XCTAssertFalse(state["wordbook"].list[0]["sources"].list[0]["translation"].text.isEmpty)
+        state=try await runtime.request("session/answer",.object(["sessionId":session["id"],"taskId":task["id"],"answer":.s("On the table.")]))
+        XCTAssertFalse(state["examOutlook"]["四级"]["estimate"].exists)
+        state=try await runtime.request("exam/assess",.object(["goal":.s("四级"),"requestId":.s(UUID().uuidString.lowercased())]))
+        XCTAssertEqual(state["examOutlook"]["四级"]["estimate"]["probabilityText"].text,"12.23%")
+        let backup=try await runtime.request("data/export")
+        XCTAssertTrue(backup.json.contains("盘子；餐盘"));XCTAssertTrue(backup.json.contains("examAssessments"))
+    }
     func testVaultKeepsExistingAESGCMFormat()throws{
         let vault=StudyVault(),name="migration-test-"+UUID().uuidString
         let content="{\"version\":1,\"sessions\":[]}",key=try vault.key(create:true)
