@@ -71,7 +71,7 @@ test('SwiftUI wordbook and manual assessment survive restart through the native 
 test('SwiftUI headless engine runs without DOM, preserves multi-answer grading and prepared tasks',async()=>{
   const h=harness();try{
     await h.request('settings',{provider:'compatible',baseURL:'https://fixture.invalid/v1',apiKey:'private-key',model:'fixture'});
-    let state=await h.request('session/start',{goal:'四级',mode:'写作'}),session=state.sessions[0];
+    let state=await h.request('session/start',{goal:'高中英语',mode:'写作'}),session=state.sessions[0];
     assert.equal(session.current.questions.length,2);assert.equal(session.current.questions[0].answer,undefined);
     state=await h.request('session/answer',{sessionId:session.id,taskId:session.current.id,answer:'["I prepared the plates.","I will cook rice."]'});
     assert.equal(state.sessions[0].history.length,1);assert.equal(state.sessions[0].nextReady,true);
@@ -110,7 +110,7 @@ test('SwiftUI rejects unreadable saved learning state before accepting any write
 test('SwiftUI rejects failed answer writes, keeps the original question and supports retry and restart',async()=>{
   const h=harness();let restored;try{
     await h.request('settings',{provider:'compatible',baseURL:'https://fixture.invalid/v1',apiKey:'private-key',model:'fixture'});
-    const started=await h.request('session/start',{goal:'四级',mode:'写作'}),session=started.sessions[0];
+    const started=await h.request('session/start',{goal:'高中英语',mode:'写作'}),session=started.sessions[0];
     const input={sessionId:session.id,taskId:session.current.id,answer:'["I prepared the plates.","I will cook rice."]'};
     const original=h.stores.get('learning-state');h.failWrites=true;
     await assert.rejects(h.request('session/answer',input),/保存失败/);

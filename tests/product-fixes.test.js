@@ -64,7 +64,7 @@ test('different subquestion weaknesses have independent schedules and targeted p
   const follow={...entry('follow','2026-11-02T10:00:00Z'),reviewOf:wrong.id,reviewQuestionIndex:1};
   state.sessions.push(round('follow',[follow],{finishedAt:follow.at,current:null}));
   plans=reviewPlan(state,'UTC',new Date('2026-11-03T12:00:00Z'));assert.equal(plans.find(p=>p.weakness==='不定冠词').streak,1);assert.equal(plans.find(p=>p.weakness==='一般过去时').streak,0);
-  const engine=createEngine({initialState:state,save:async()=>{},modelCall:async(c,p,ctx)=>{assert.equal(ctx.review.targetQuestion.prompt,'问题二');assert.equal(ctx.review.targetFeedback.weakness,'不定冠词');return task('targeted');}});
+  const engine=createEngine({initialState:state,save:async()=>{},modelCall:async(c,p,ctx)=>{assert.equal(ctx.review.targetQuestion.prompt,'问题二');assert.equal(ctx.review.targetFeedback.weakness,'不定冠词');return {...task('targeted'),examPart:'写作'};}});
   await engine.execute('/api/session/start',{goal:'四级',mode:'写作',reviewId:wrong.id,reviewQuestionIndex:1});
   assert.equal(engine.backup().data.sessions.at(-1).reviewQuestionIndex,1);
 });
@@ -100,7 +100,7 @@ test('single unanswered tasks can be explicitly skipped without entering fake an
 test('a portable active review retains the exact target subquestion in tutor context after restart',async()=>{
   const wrong={...entry('portable','2026-11-01T10:00:00Z'),task:group,answer:'["a","b"]',feedback:{...feedback(false,'语法'),questions:[feedback(false,'一般过去时'),feedback(false,'不定冠词')]}};
   const initial={version:1,config,sessions:[round('old-portable',[wrong],{finishedAt:'2026-11-01T10:01:00Z',current:null})]};
-  const engine=createEngine({initialState:initial,save:async()=>{},modelCall:async()=>task('practice')});
+  const engine=createEngine({initialState:initial,save:async()=>{},modelCall:async()=>({...task('practice'),examPart:'写作'})});
   const started=await engine.execute('/api/session/start',{goal:'四级',mode:'写作',reviewId:wrong.id,reviewQuestionIndex:1});
   const {validateBackup}=await import('../server/backup.js');
   const saved=validateBackup(engine.backup());saved.config=config;

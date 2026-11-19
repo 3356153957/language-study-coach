@@ -18,16 +18,16 @@ test('switching goals reuses one learner profile and cross-goal history; a new r
   const h = await harness(t, async (cfg, prompt, ctx) => {
     contexts.push(ctx);
     if (prompt === prompts.report) return report;
-    if (prompt === prompts.next) return ctx.goal === '四级' ? task(1) : { ...task(2), kind: 'text', skill: '表达', options: [], answer: 'I read a book.' };
+    if (prompt === prompts.next) return ctx.goal === '高中英语' ? task(1) : { ...task(2), kind: 'text', skill: '表达', options: [], answer: 'I read a book.' };
     return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: task(3) };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' });
   const first = (await h.request('session/finish', { sessionId: s.id })).body.profile;
   s = (await h.request('session/start', { goal: '初中英语', mode: '写作' })).body.sessions.at(-1);
   assert.deepEqual(contexts.at(-1).profile, first);
-  assert.equal(contexts.at(-1).recentHistory[0].goal, '四级');
+  assert.equal(contexts.at(-1).recentHistory[0].goal, '高中英语');
   await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'I read a book.' });
   const result = await h.request('session/finish', { sessionId: s.id });
   assert.equal(result.status, 200);
@@ -45,7 +45,7 @@ test('live evidence survives when the next question tests another skill', async 
     return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: reading };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   let result = await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' });
   s = result.body.sessions[0];
   assert.equal(result.body.profile.skills.find(x => x.name === '语法').level, '练习中');
@@ -64,7 +64,7 @@ test('a failed learning summary still closes the round and allows a new round', 
     return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: task(2) };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   s = (await h.request('session/answer', { sessionId: s.id, taskId: s.current.id, answer: 'went' })).body.sessions[0];
   const finished = await h.request('session/finish', { sessionId: s.id });
   assert.equal(finished.status, 200);
@@ -83,7 +83,7 @@ test('follow-up clarification persists without regrading or consuming the prepar
     return { feedback: { correct: false, explanation: '先前理解为菜肴。', suggestion: 'I had prepared the dish.', weakness: '时态和词义' }, nextTask: task(2) };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   const input = { sessionId: s.id, taskId: s.current.id };
   s = (await h.request('session/answer', { ...input, answer: 'I was prerary the dish on the desk' })).body.sessions[0];
   const feedback = structuredClone(s.feedback), history = structuredClone(s.history);
@@ -117,7 +117,7 @@ test('pre-answer coaching hides the key, marks assistance and passes discussion 
     return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: task(2) };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   const input = { sessionId: s.id, taskId: s.current.id };
   const payload = { ...input, requestId: randomUUID(), message: '可以解释一下时间词吗？', draftAnswer: 'go' };
   const before = (await h.request('state')).body;
@@ -152,7 +152,7 @@ test('imported learning background is persisted, deduplicated, shared across goa
   assert.equal((await h.request('background/import', { ...payload, evidence: [] })).status, 400);
   assert.deepEqual((await h.request('state')).body, before);
   await h.request('settings', config);
-  const s = (await h.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  const s = (await h.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   assert.equal(contexts.at(-1).learningBackground[0].source.title, '英语');
   await h.request('session/finish', { sessionId: s.id });
   await h.request('session/start', { goal: '日常英语', mode: '综合' });
@@ -251,7 +251,7 @@ test('full placement: hidden answers, adaptive context, idempotent grading, repo
     return prompt === prompts.gradeAndNext ? { feedback, nextTask: task(ctx.history.length + 2) } : feedback;
   };
   const h = await harness(t, fake), req = h.request;
-  assert.equal((await req('session/start', { goal: '四级', mode: '综合', placement: true })).status, 409);
+  assert.equal((await req('session/start', { goal: '高中英语', mode: '综合', placement: true })).status, 409);
   const saved = await req('settings', config);
   assert.equal(JSON.stringify(saved).includes('test-secret'), false);
   assert.equal((await req('settings', config, { Origin: 'https://evil.example' })).status, 403);
@@ -260,7 +260,7 @@ test('full placement: hidden answers, adaptive context, idempotent grading, repo
     request.on('error', reject); request.end();
   });
   assert.equal(hostStatus, 403);
-  let r = await req('session/start', { goal: '四级', mode: '综合', placement: true });
+  let r = await req('session/start', { goal: '高中英语', mode: '综合', placement: true });
   assert.equal(r.status, 200);
   let s = r.body.sessions[0];
   assert.equal('answer' in s.current, false);
@@ -284,7 +284,7 @@ test('full placement: hidden answers, adaptive context, idempotent grading, repo
   const reloaded = await harness(t, fake, h.directory);
   assert.deepEqual((await reloaded.request('state')).body, r.body);
   const reviewId = r.body.sessions[0].history[0].id;
-  r = await req('session/start', { goal: '四级', mode: '综合', reviewId });
+  r = await req('session/start', { goal: '高中英语', mode: '综合', reviewId });
   assert.equal(r.status, 200);
   assert.equal(contexts.at(-1).review.id, reviewId);
   assert.ok((await readFile(path.join(h.directory, 'state.json'), 'utf8')).includes('test-secret'));
@@ -324,7 +324,7 @@ test('grading prepares a private persisted next question; switching never calls 
   };
   const first = await harness(t, fake);
   await first.request('settings', config);
-  const session = (await first.request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  const session = (await first.request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   const input = { sessionId: session.id, taskId: session.current.id, answer: 'went' };
   const graded = (await first.request('session/answer', input)).body.sessions[0];
   assert.equal(calls.at(-1).prompt, prompts.gradeAndNext);
@@ -349,7 +349,7 @@ test('an invalid prepared task preserves feedback and is regenerated only on nex
     return { feedback: { correct: true, explanation: '正确。', suggestion: '', weakness: '' }, nextTask: task(1) };
   });
   await request('settings', config);
-  const session = (await request('session/start', { goal: '四级', mode: '综合' })).body.sessions[0];
+  const session = (await request('session/start', { goal: '高中英语', mode: '综合' })).body.sessions[0];
   const input = { sessionId: session.id, taskId: session.current.id, answer: 'went' };
   const graded = (await request('session/answer', input)).body.sessions[0];
   assert.equal(graded.history.length, 1);
@@ -393,7 +393,7 @@ test('B1 reading and listening tasks can contain multiple questions while hiding
     return { feedback: { correct: true, explanation: '两问都答对了。', suggestion: '', weakness: '' }, nextTask: { ...grouped, prompt: 'A different follow-up question.', questions: [{ prompt: 'A follow-up?', options: ['Yes', 'No'], answer: 'Yes' }] } };
   });
   await h.request('settings', config);
-  let s = (await h.request('session/start', { goal: '四级', mode: '阅读' })).body.sessions[0];
+  let s = (await h.request('session/start', { goal: '高中英语', mode: '阅读' })).body.sessions[0];
   assert.equal(s.current.questions.length, 2);
   assert.equal(s.current.questions[0].answer, undefined);
   assert.equal(s.current.translation, undefined);

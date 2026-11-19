@@ -37,6 +37,15 @@ prompts.report += `\n画像综合所有目标的记录；本轮未测的能力�
 
 prompts.grade += `\ntelemetry.skippedQuestions 是用户明确标记不会的小题的零起始索引。这些项保持未作答，correct 必须为 false，解释标为未作答并给学习引导；不当成独立掌握的证据，不替用户补答案。其他小题正常独立批改。`;
 prompts.next += `\nreview.targetQuestion（若有）是本轮用户选择复习的具体错小题，第一题只针对它及 targetFeedback.weakness 换材料考查，不连带复习原题组其他知识点。`;
+prompts.next += `\n四级、六级目标（goal 为四级或六级）必须按真题题型出题，并在任务中增加字段 "examPart"。四级可用：写作、短篇新闻、长对话、听力篇章、选词填空、长篇阅读、仔细阅读、翻译；六级可用：写作、长对话、听力篇章、讲座、选词填空、长篇阅读、仔细阅读、翻译。其他目标不返回 examPart。听力模式只出听力题型，阅读模式只出选词填空、长篇阅读或仔细阅读，写作模式只出写作或翻译；综合模式结合薄弱点选择并适当轮换题型。
+各题型的真题规格与作答形式：
+- 写作：kind=text、skill=表达、一个答题格。给出情境或提纲，四级要求 120–180 词，六级 150–200 词。
+- 翻译：kind=text、skill=表达、一个答题格。prompt 给出一段完整中文段落要求译成英文，四级约 140–160 个汉字，六级约 180–200 个汉字，不拆成逐句翻译。
+- 听力（短篇新闻、长对话、听力篇章、讲座）：kind=listening、skill=听力。audio 是一段完整材料（新闻播报、两人长对话、短文或讲座），同一段材料下 2–4 个问题，每题恰好 4 个选项。
+- 仔细阅读：kind=choice、skill=阅读。passage 为完整文章（真题约 300–450 词），同一篇下最多 5 个问题，每题恰好 4 个选项。
+- 选词填空：kind=choice、skill=阅读。passage 中用 (1)____、(2)____ 依次标出空格，真题为 10 个空、15 个备选词。questions 每项对应一个空，prompt 写“第 n 空”；所有问题的 options 是同一个词库（内容和顺序一致），各空答案互不相同；不要把词库再写进 passage。备选词数量按水平逐步增加：起步约 5 个空、7 个备选词，备选词至少比空数多 2 个作为干扰项；连续答对后每次增加 1–2 个备选词并相应增加空数（如 7→9→11→13→15），出错较多时保持或退回上一档，最终达到 10 个空、15 个备选词。
+- 长篇阅读：kind=choice、skill=阅读。passage 由带字母标号的段落组成，每段以“A) ”“B) ”开头（真题约 1000 词、10 段以上）。questions 是 10 个陈述，每题 options 是从 A 开始连续的段落字母（如 ["A","B","C"]），answer 为对应段落字母，同一段落可对应多个陈述。
+难度与规模逐步提高：题型、作答形式和单题四选一始终与真题一致；篇幅、空数、题数和语言难度从学习者当前水平起步（例如仔细阅读先 150–250 词、选词填空先约 5 个空和 7 个备选词、写作先 60–100 词），稳定答对后逐步加到真题规模。reason 说明本题对应的真题题型，以及当前规模与真题规模的差距。前文“A1/A2 只出一个问题”的规则不适用于四六级题型。`;
 
 prompts.gradeAndNext = prompts.grade + `\n本次同时准备下一题。先判断当前回答，再根据这个批改结果、当前暴露的薄弱点和 history 中的记录选择下一题。history 尚未包含当前 task、answer、telemetry，生成下一题时必须把它们也作为最新证据；不得重复当前 task 或历史题目。` + prompts.next.slice(base.length) + `\n最终只返回一个对象 {"feedback":上述批改对象,"nextTask":上述新题对象}。feedback.suggestion 只润色用户当前 answer，与 nextTask.answer（新题参考答案）分开；不返回 Markdown 或其他内容。`;
 
@@ -53,6 +62,22 @@ export function validateReply(data) {
   return str(data?.reply, 6000);
 }
 
+// CET-4/6 parts. Each part fixes the answer format; size may grow gradually.
+export const examParts = {
+  四级: ['写作', '短篇新闻', '长对话', '听力篇章', '选词填空', '长篇阅读', '仔细阅读', '翻译'],
+  六级: ['写作', '长对话', '听力篇章', '讲座', '选词填空', '长篇阅读', '仔细阅读', '翻译'],
+};
+const listeningPart = { kind: 'listening', skill: '听力', modes: ['综合', '听力'], maxQuestions: 4, options: [4, 4] };
+const partRules = {
+  写作: { kind: 'text', skill: '表达', modes: ['综合', '写作'], maxQuestions: 1 },
+  翻译: { kind: 'text', skill: '表达', modes: ['综合', '写作'], maxQuestions: 1 },
+  短篇新闻: listeningPart, 长对话: listeningPart, 听力篇章: listeningPart, 讲座: listeningPart,
+  仔细阅读: { kind: 'choice', skill: '阅读', modes: ['综合', '阅读'], maxQuestions: 5, options: [4, 4] },
+  选词填空: { kind: 'choice', skill: '阅读', modes: ['综合', '阅读'], maxQuestions: 10, options: [2, 15] },
+  长篇阅读: { kind: 'choice', skill: '阅读', modes: ['综合', '阅读'], maxQuestions: 10, options: [2, 15] },
+};
+const paragraphLetters = 'ABCDEFGHIJKLMNO'.split('');
+
 function str(value, max = 6000, empty = false) {
   if (typeof value !== 'string' || (!empty && !value.trim()) || value.length > max) throw new AppError('模型内容缺少必要字段或长度异常，请重试。', 502);
   return value.trim();
@@ -67,21 +92,37 @@ export function validateTask(data, session) {
   if (!data || !['choice', 'text', 'listening', 'conversation'].includes(data.kind) || !skills.includes(data.skill) || !['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(data.level)) throw new AppError('模型题型或能力标签不正确，请重试。', 502);
   if (session.mode === '对话' && data.kind !== 'conversation' || session.mode === '听力' && data.kind !== 'listening' || session.mode === '题卡' && !['choice', 'text'].includes(data.kind)) throw new AppError('模型未遵循所选练习方式，请重试。', 502);
   if (session.mode === '写作' && (data.kind !== 'text' || data.skill !== '表达') || session.mode === '阅读' && (!['choice', 'text'].includes(data.kind) || data.skill !== '阅读')) throw new AppError('模型未遵循所选练习方式，请重试。', 502);
-  const task = { id: randomUUID(), kind: data.kind, skill: data.skill, level: data.level,
-    reason: str(data.reason, 600), prompt: str(data.prompt, 2500), passage: str(data.passage, 6000, true),
-    translation: str(typeof data.translation === 'string' ? data.translation : '', 6000, true), audio: str(data.audio, 4000, true), answer: str(data.answer, 3000, Array.isArray(data.questions) && data.questions.length > 0), hint: str(data.hint, 1000), options: data.options };
+  const examPart = data.examPart === undefined || data.examPart === null || data.examPart === '' ? null : data.examPart;
+  const rule = examPart === null ? null : partRules[examPart];
+  if (examPart !== null && !rule) throw new AppError('模型返回的四六级题型无效，请重试。', 502);
+  // New tasks for an exam goal must name a real part of that exam. Imported
+  // history (preserveQuestionLayout) may predate exam parts and stays valid.
+  if (examParts[session.goal] && !session.preserveQuestionLayout && !examParts[session.goal].includes(examPart)) throw new AppError(`模型没有按${session.goal}真题题型出题，请重试。`, 502);
+  if (rule && (data.kind !== rule.kind || data.skill !== rule.skill || !rule.modes.includes(session.mode))) throw new AppError('模型的作答形式与四六级题型不一致，请重试。', 502);
+  const longReading = rule?.skill === '阅读' ? 12000 : 6000;
+  const task = { id: randomUUID(), kind: data.kind, skill: data.skill, level: data.level, ...(examPart ? { examPart } : {}),
+    reason: str(data.reason, 600), prompt: str(data.prompt, 2500), passage: str(data.passage, longReading, true),
+    translation: str(typeof data.translation === 'string' ? data.translation : '', longReading, true), audio: str(data.audio, 4000, true), answer: str(data.answer, 3000, Array.isArray(data.questions) && data.questions.length > 0), hint: str(data.hint, 1000), options: data.options };
   if (!Array.isArray(task.options)) throw new AppError('模型没有返回有效选项，请重试。', 502);
   task.options = task.options.map(x => str(x, 700));
   const rawQuestions = Array.isArray(data.questions) && data.questions.length ? data.questions : [{ prompt: task.prompt, options: task.options, answer: task.answer }];
-  if (rawQuestions.length > 4) throw new AppError('模型一次生成的问题过多，请重试。', 502);
+  if (rawQuestions.length > (rule?.maxQuestions ?? 4)) throw new AppError('模型一次生成的问题过多，请重试。', 502);
+  const [minOptions, maxOptions] = rule?.options ?? [2, 4];
   task.questions = rawQuestions.map(q => {
     if (!q || typeof q !== 'object') throw new AppError('模型问题结构不完整，请重试。', 502);
     const question = { prompt: str(q.prompt, 1500), options: Array.isArray(q.options) ? q.options.map(x => str(x, 700)) : [], answer: str(q.answer, 3000) };
     if (['choice', 'listening'].includes(task.kind)) {
-      if (question.options.length < 2 || question.options.length > 4 || new Set(question.options).size !== question.options.length || !question.options.includes(question.answer)) throw new AppError('模型选择题答案与选项不一致，请重试。', 502);
+      if (question.options.length < minOptions || question.options.length > maxOptions || new Set(question.options).size !== question.options.length || !question.options.includes(question.answer)) throw new AppError('模型选择题答案与选项不一致，请重试。', 502);
     } else if (question.options.length) throw new AppError('开放题不应包含选择题选项，请重试。', 502);
     return question;
   });
+  if (examPart === '选词填空') {
+    const bank = JSON.stringify(task.questions[0].options);
+    if (task.questions.some(q => JSON.stringify(q.options) !== bank) || new Set(task.questions.map(q => q.answer)).size !== task.questions.length) throw new AppError('选词填空需要共用同一个词库且各空答案不同，请重试。', 502);
+    // At least two spare words, so the last blank is never decided by elimination.
+    if (task.questions[0].options.length < task.questions.length + 2) throw new AppError('选词填空的备选词至少要比空数多 2 个干扰项，请重试。', 502);
+  }
+  if (examPart === '长篇阅读' && task.questions.some(q => q.options.join('') !== paragraphLetters.slice(0, q.options.length).join(''))) throw new AppError('长篇阅读的选项必须是从 A 开始的段落字母，请重试。', 502);
   if (task.questions.length === 1 && !Array.isArray(data.questions)) task.questions = null;
   if (task.questions?.length === 1 && !session.preserveQuestionLayout) {
     task.options = task.questions[0].options;

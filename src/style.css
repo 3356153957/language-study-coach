@@ -388,3 +388,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  .chat-bottom { padding-bottom:max(10px, env(safe-area-inset-bottom)); }
  .week-table-wrap { touch-action:pan-x pan-y; }
 }
+
+/* CET many-option parts: banked cloze and paragraph matching pick a letter. */
+.chat-session .exercise-options.compact { grid-template-columns:repeat(auto-fill, minmax(42px, 1fr)); gap:6px; margin-top:10px; }
+.chat-session .exercise-options.compact .exercise-option { min-height:40px; padding:6px; justify-content:center; }
+.chat-session .exercise-options.compact .exercise-option > span { width:auto; height:auto; padding:0 4px; background:transparent; color:inherit; font-size:13px; }
+.word-bank { display:flex; flex-wrap:wrap; gap:6px 8px; margin:14px 0 4px; padding:12px; border:1px solid #e3e2d9; border-radius:12px; background:#fffefa; }
+.word-bank-title { width:100%; color:var(--violet); font-size:11px; font-weight:700; }
+.word-bank span[role="listitem"] { display:inline-flex; align-items:baseline; gap:5px; padding:4px 8px; border-radius:8px; background:#f3f1ff; color:var(--ink); font-size:14px; }
+.word-bank b { color:var(--violet); font-size:11px; }
+.picked-word { margin-left:8px; color:var(--violet); font-size:12px; font-weight:600; }
+.chat-session .exercise-options.compact .exercise-option.selected { border-color:var(--violet); background:var(--violet); color:#fff; }
+.chat-session .exercise-options.compact .exercise-option.correct { border-color:#5b9c6d; background:#5b9c6d; color:#fff; }
+.chat-session .exercise-options.compact .exercise-option.wrong { border-color:#d16b57; background:#d16b57; color:#fff; }

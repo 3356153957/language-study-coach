@@ -23,14 +23,14 @@ function session(s) {
     const skippedQuestions=validateSkippedQuestions(t,e.skippedQuestions);
     validateLearnerAnswer(t,answer,{skippedQuestions});
     const revisions = e.revisions === undefined ? undefined : Array.isArray(e.revisions) && e.revisions.length <= 3 ? e.revisions.map(r => ({id:id(r.id),at:date(r.at),previousFeedback:validateFeedback(r.previousFeedback,t,answer,{allowLegacy:true,skippedQuestions})})) : fail();
-    return {id:id(e.id),task:t,answer,feedback:validateFeedback(e.feedback,t,answer,{allowLegacy:true,skippedQuestions}),...(revisions ? {revisions} : {}),...(e.reviewOf ? {reviewOf:id(e.reviewOf)} : {}),...(e.reviewQuestionIndex !== undefined ? {reviewQuestionIndex:integer(e.reviewQuestionIndex,3)} : {}),...(skippedQuestions.length ? {skippedQuestions} : {}),at:date(e.at),askedAt:date(e.askedAt || s.startedAt),
+    return {id:id(e.id),task:t,answer,feedback:validateFeedback(e.feedback,t,answer,{allowLegacy:true,skippedQuestions}),...(revisions ? {revisions} : {}),...(e.reviewOf ? {reviewOf:id(e.reviewOf)} : {}),...(e.reviewQuestionIndex !== undefined ? {reviewQuestionIndex:integer(e.reviewQuestionIndex,9)} : {}),...(skippedQuestions.length ? {skippedQuestions} : {}),at:date(e.at),askedAt:date(e.askedAt || s.startedAt),
       activeSeconds:integer(e.activeSeconds || 0,1800),replays:integer(e.replays || 0,100),hintUsed:flag(e.hintUsed || false),transcriptViewed:flag(e.transcriptViewed || false)};
   });
   if(new Set(h.map(e=>e.id)).size!==h.length || new Set(h.map(e=>e.task.id)).size!==h.length) fail();
   const result={id:id(s.id),goal:s.goal,mode:s.mode,placement:!!s.placement,targetCount:integer(s.targetCount,100),startedAt:date(s.startedAt),history:h,
     finishedAt:s.finishedAt?date(s.finishedAt):null,report:report(s.report),current:s.current?task(s.current,s.mode):null,feedback:null,prepared:null};
   if (s.reportError) result.reportError=text(s.reportError,6000);
-  if (s.reviewQuestionIndex !== undefined) result.reviewQuestionIndex=integer(s.reviewQuestionIndex,3);
+  if (s.reviewQuestionIndex !== undefined) result.reviewQuestionIndex=integer(s.reviewQuestionIndex,9);
   if (s.reviewId || s.review?.id) result.reviewId=id(s.reviewId || s.review.id);
   if (s.focus) result.focus={text:text(s.focus.text,1500),...(s.focus.sourceSessionId ? {sourceSessionId:id(s.focus.sourceSessionId)} : {})};
   if (s.unfinished) {

@@ -16,7 +16,41 @@ const tasks = [
   { kind: 'text', skill: '表达', prompt: 'Write one sentence about your plan for next week.', options: [], answer: 'I plan to read a short story next week.', hint: '可以用 I plan to…。' },
 ];
 
+// CET goals must use real exam parts; these fixtures cover the many-option parts.
+const bank = ['adopt', 'benefit', 'crucial', 'decline', 'efficient', 'flexible', 'gradually', 'highlight', 'impact', 'journey', 'keen', 'launch', 'maintain', 'notable', 'obtain'];
+const clozeAnswers = ['adopt', 'efficient', 'gradually', 'benefit', 'impact', 'maintain', 'crucial', 'flexible', 'obtain', 'notable'];
+const paragraphs = 'ABCDEFGHIJ'.split('');
+const cetTasks = {
+  选词填空: { kind: 'choice', skill: '阅读', examPart: '选词填空', prompt: '阅读短文，从词库中为每个空选择一个词，每个词最多用一次。',
+    passage: 'More universities now (1)____ online courses. Students find them (2)____ because they can study at home. Skills improve (3)____ with practice, and many learners (4)____ from instant feedback. Teachers say the (5)____ on attendance is small, but schools must (6)____ quality. Clear goals are (7)____, and a (8)____ timetable helps. Students who (9)____ good results often share (10)____ tips with classmates.',
+    translation: '（模拟译文）越来越多的大学开设网课……', options: [], answer: '',
+    questions: clozeAnswers.map((answer, i) => ({ prompt: `第 ${i + 1} 空`, options: bank, answer })) },
+  长篇阅读: { kind: 'choice', skill: '阅读', examPart: '长篇阅读', prompt: '下列每个陈述对应文中一个段落，段落可重复选择。',
+    passage: paragraphs.map(p => `${p}) Paragraph ${p}: a short simulated paragraph about how students use public libraries in different ways.`).join('\n'),
+    translation: '（模拟译文）', options: [], answer: '',
+    questions: Array.from({ length: 10 }, (_, i) => ({ prompt: `Statement ${i + 1}: a detail that appears in paragraph ${paragraphs[i % 6]}.`, options: paragraphs, answer: paragraphs[i % 6] })) },
+  仔细阅读: { kind: 'choice', skill: '阅读', examPart: '仔细阅读', prompt: '阅读短文，回答问题。',
+    passage: 'Community gardens have spread across many cities. They give residents fresh food, a place to meet neighbours and a chance to learn about nature. Some critics worry about the cost of land, but supporters argue that the social benefits are worth it.',
+    translation: '（模拟译文）', options: [], answer: '',
+    questions: [
+      { prompt: 'What is the passage mainly about?', options: ['Community gardens', 'Land prices', 'City parks', 'Farming jobs'], answer: 'Community gardens' },
+      { prompt: 'What do critics worry about?', options: ['Noise', 'The cost of land', 'Water supply', 'Safety'], answer: 'The cost of land' },
+    ] },
+  短篇新闻: { kind: 'listening', skill: '听力', examPart: '短篇新闻', prompt: '听新闻，回答问题。',
+    audio: 'A city library opened a new reading room on Monday. The room stays open until midnight during the exam season, and students can borrow laptops there.', options: [], answer: '',
+    questions: [
+      { prompt: 'What opened on Monday?', options: ['A reading room', 'A cafe', 'A gym', 'A bookshop'], answer: 'A reading room' },
+      { prompt: 'What can students borrow?', options: ['Books only', 'Laptops', 'Bikes', 'Cameras'], answer: 'Laptops' },
+    ] },
+  写作: { kind: 'text', skill: '表达', examPart: '写作', prompt: 'Write a short essay on the value of volunteering. You should write at least 60 words (the real exam asks for 120–180).', options: [], answer: 'Volunteering helps others and builds useful skills.' },
+};
+const cetOrder = { 综合: ['选词填空', '长篇阅读', '仔细阅读', '短篇新闻', '写作'], 阅读: ['选词填空', '长篇阅读', '仔细阅读'], 听力: ['短篇新闻'], 写作: ['写作'] };
+
 function nextTask(ctx) {
+  if (['四级', '六级'].includes(ctx.goal)) {
+    const order = cetOrder[ctx.mode] || cetOrder.综合;
+    return { passage: '', audio: '', translation: '', level: 'B1', hint: '【模拟联调】先看清题型要求。', reason: '【模拟联调】验证四六级真题题型的渲染与作答。', ...cetTasks[order[ctx.history.length % order.length]] };
+  }
   const index = ctx.history.length;
   const template = ctx.mode === '对话' ? { ...tasks[2], prompt: index ? 'What would you recommend to a friend, and why?' : tasks[2].prompt }
     : ctx.mode === '听力' ? { ...tasks[1], prompt: tasks[1].prompt + ` (Round ${index + 1})` }
@@ -33,7 +67,9 @@ const upstream = createHTTPServer(async (req, res) => {
   const body = JSON.parse(raw), ctx = JSON.parse(body.messages.at(-1).content), system = body.messages[0].content;
   if (ctx.action === 'connection-test') result = { ok: true };
   else if (system === prompts.grade || system === prompts.gradeAndNext) {
-    const correct = !ctx.task.options.length || ctx.answer === ctx.task.answer;
+    const items = ctx.task.questions?.length ? ctx.task.questions : [{ options: ctx.task.options, answer: ctx.task.answer }];
+    let values = [ctx.answer]; try { if (items.length > 1) values = JSON.parse(ctx.answer); } catch { values = []; }
+    const correct = items.every((item, i) => !item.options?.length || values[i] === item.answer);
     result = { correct, explanation: correct ? '【模拟联调】回答符合题意。' : '【模拟联调】Yesterday 表示过去，应使用 went。', suggestion: '', weakness: correct ? '' : '一般过去时' };
     if (system === prompts.gradeAndNext) result = { feedback: result, nextTask: nextTask({ ...ctx, history: [...ctx.history, { task: ctx.task, answer: ctx.answer, feedback: result }] }) };
   } else if (system.includes('生成更新后的初步学习画像')) {
