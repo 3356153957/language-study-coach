@@ -91,7 +91,7 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
     if (path === 'settings/models') return engine.models(body || {});
     if (path === 'settings' && body?.provider==='chatgpt' && !(await auth.status()).loggedIn) throw new AppError('请先使用 ChatGPT 登录，再启用。',409);
     const result=await engine.execute(`/api/${path}`, body || {}, { compact, timeZone });
-    if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess') sync.notifyChange();
+    if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess' || path==='profile/refresh') sync.notifyChange();
     return result;
   },close(){sync.close();} };
 }

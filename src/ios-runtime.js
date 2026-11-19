@@ -62,7 +62,7 @@ globalThis.studyRequest=async(path,body)=>{
   if(path==='settings' && body.provider==='chatgpt' && !(await auth.status()).loggedIn)throw new AppError('请先授权 ChatGPT 账号。');
   if(path==='session/start' && body.placement)throw new AppError('请从日常练习开始。');
   const result=await engine.execute(`/api/${path}`,body || {},options);
-  if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess')sync.notifyChange();
+  if(path.startsWith('session/') || path==='data/import' || path==='learning-plan' || path.startsWith('vocabulary/') || path==='exam/assess' || path==='profile/refresh')sync.notifyChange();
   return result;
 };
 globalThis.studySnapshot=()=>JSON.stringify(engine.view(options));

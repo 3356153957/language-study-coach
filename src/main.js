@@ -7,6 +7,7 @@ import { createDraftStore } from './draft-store.js';
 import './style.css';
 import './dashboard.css';
 import './studio.css';
+import './desktop-shell.js';
 import { renderDashboard, renderProfile, renderActivity, renderPractice, renderExamAssessment } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
@@ -348,7 +349,8 @@ function page() {
   return home();
 }
 function welcome() {
-  return `<section class="welcome-page"><div class="welcome-copy"><span class="eyebrow">YOUR OWN ENGLISH COACH</span><h1>从你的起点，<br>学到<em>用得出来。</em></h1><p>选一个适合你的学习目标。直接从日常练习开始，让 AI 根据每次回答了解你，逐步安排下一步。</p><div class="welcome-note"><span class="spark">✦</span>不用研究学习路线，先从一道题开始。</div></div>
+  const learned = data.totals?.all?.count || 0;
+  return `<section class="welcome-page"><div class="welcome-copy"><span class="eyebrow">${learned ? `已完成 ${learned} 道练习` : 'YOUR ENGLISH COACH'}</span><h1>${learned ? '继续你的<br><em>英语练习。</em>' : '今天，<br><em>练一点英语。</em>'}</h1><p>${learned && data.profile?.summary ? esc(data.profile.summary.length > 200 ? data.profile.summary.slice(0,200) + '…' : data.profile.summary) : '选择学习目标，从一轮练习开始。'}</p><div class="welcome-note">${learned ? '选择接下来想练的目标。' : '阅读、听力、表达，按你的节奏来。'}</div></div>
     <div class="preset-panel"><div class="panel-heading">你想从哪里开始？<span class="muted">随时可以更换</span></div><div class="preset-grid">${presets.map(([name, value, tag, detail, color, icon]) => `<button class="preset-card ${color}" data-action="goal" data-value="${value}" ${busy ? 'disabled' : ''}><span class="card-arrow">↗</span><span class="preset-icon">${icon}</span><span class="preset-text"><span class="preset-eyebrow">${tag}</span><strong>${name}</strong><span>${detail}</span></span></button>`).join('')}</div><div class="panel-footer">四个学习目标 · 一个会逐步了解你的教练</div></div></section>`;
 }
 function home() { return renderDashboard({ data, goal, esc, button, date, demoAnswer }); }
@@ -395,7 +397,7 @@ function summaryPage() {
   if (!s) return '<div class="empty-state">正在读取练习记录…</div>';
   const report = s.report, score = roundCounts(s.history);
   const warning = s.reportError ? `<div class="summary-warning" role="alert"><strong>本轮作答已保存。</strong><p>${esc(s.reportError)}</p></div>` : '';
-  return `<section class="summary-page"><span class="summary-icon">✓</span><span class="eyebrow">ONE STEP FURTHER</span><h1>这一轮，<em>有所收获。</em></h1><p>${esc(report?.summary || (s.history.length ? '本轮作答已保存，学习小结暂未生成。' : '本轮没有提交答案。'))}</p>${warning}${!report && s.finishedAt && s.history.length ? `<div class="form-actions">${button('补生成本轮小结','recover-report','secondary-button',`data-id="${esc(s.id)}"`)}<p class="field-help">只使用本轮结束时已有的作答；不会重新判分或增加学习时长。</p></div>` : ''}${report?.generatedAt ? `<p class="fine-print">根据 ${esc(new Date(s.finishedAt).toLocaleDateString('zh-CN'))} 本轮记录补生成。保留的是当时的表现，不表示今天的能力变化。</p>` : ''}<div class="summary-grid"><div><span>完成</span><strong>${score.count}<small> 题</small></strong></div><div><span>回答正确</span><strong>${score.correct}<small> 题</small></strong></div><div><span>有效作答</span><strong class="summary-time">${duration(s.history.reduce((n, x) => n + (x.activeSeconds || 0), 0))}</strong></div></div>${report ? `<div class="summary-focus"><span class="spark">✦</span><div><strong>下一步，试试这个方向</strong><p>${esc(report.nextFocus)}</p>${button('按这个建议继续练 →', 'start-recommended', 'secondary-button', `data-id="${esc(s.id)}" data-goal="${esc(s.goal)}" ${current() ? 'disabled' : ''}`)}</div></div><p class="fine-print">AI 初步判断：${esc(report.level)} · 仅根据已有作答，不代表正式考试成绩。</p>` : ''}${roundReview(s)}${unfinishedReview(s)}<div class="form-actions">${button('回到学习页', 'home')}${button('回顾错题', 'review', 'secondary-button')}</div></section>`;
+  return `<section class="summary-page"><span class="summary-icon">✓</span><span class="eyebrow">ONE STEP FURTHER</span><h1>${esc(s.goal)} · <em>${esc(modeName(s.mode))}小结</em></h1><p class="fine-print">${esc(new Date(s.finishedAt || s.startedAt).toLocaleDateString('zh-CN'))} · 完成 ${score.count} 题</p><p>${esc(report?.summary || (s.history.length ? '本轮作答已保存，学习小结暂未生成。' : '本轮没有提交答案。'))}</p>${warning}${!report && s.finishedAt && s.history.length ? `<div class="form-actions">${button('补生成本轮小结','recover-report','secondary-button',`data-id="${esc(s.id)}"`)}</div>` : ''}${report?.generatedAt ? `<p class="fine-print">小结更新于 ${esc(new Date(report.generatedAt).toLocaleString('zh-CN'))}</p>` : ''}<div class="summary-grid"><div><span>完成</span><strong>${score.count}<small> 题</small></strong></div><div><span>回答正确</span><strong>${score.correct}<small> 题</small></strong></div><div><span>有效作答</span><strong class="summary-time">${duration(s.history.reduce((n, x) => n + (x.activeSeconds || 0), 0))}</strong></div></div>${report ? `<div class="summary-focus"><span class="spark">✦</span><div><strong>下一步，试试这个方向</strong><p>${esc(report.nextFocus)}</p>${button('按这个建议继续练 →', 'start-recommended', 'secondary-button', `data-id="${esc(s.id)}" data-goal="${esc(s.goal)}" ${current() ? 'disabled' : ''}`)}</div></div><p class="fine-print">本轮能力 · ${esc(report.level)}</p>${button('重新整理本轮小结','recover-report','text-button',`data-id="${esc(s.id)}" data-regenerate="true"`)}` : ''}${roundReview(s)}${unfinishedReview(s)}<div class="form-actions">${button('回到学习页', 'home')}${button('回顾错题', 'review', 'secondary-button')}</div></section>`;
 }
 function unfinishedReview(session) {
   const pending = session.unfinished;
@@ -485,10 +487,18 @@ app.addEventListener('click', async event => {
     reviewFilter = action === 'review-due' ? 'due' : 'all'; return navigate('review');
   }
   if (action === 'review') reviewFilter = 'all';
+  if (action === 'refresh-profile') {
+    if (!data.configured) return navigate('settings');
+    return run('正在整理最近的学习表现…', async () => {
+      await api('profile/refresh', {});
+      data = { ...data, ...await request('profile') };
+      notice = '学习小结已更新。';
+    });
+  }
   if (action === 'recover-report') return run('正在根据本轮保存的回答补生成小结…',async()=>{
     const id=el.dataset.id;
-    await api('session/report',{sessionId:id});detailSession=await request(`session/detail?id=${encodeURIComponent(id)}`);screen='summary';
-    notice='小结已补生成，原答案、题数和作答时长没有增加。';
+    await api('session/report',{sessionId:id,regenerate:el.dataset.regenerate === 'true'});detailSession=await request(`session/detail?id=${encodeURIComponent(id)}`);screen='summary';
+    notice='小结已更新。';
   });
   if (action === 'demo-answer') { demoAnswer = ['read','reads'].includes(el.dataset.value) ? el.dataset.value : ''; return render(); }
   if (action === 'connect-existing') return run('正在检查已有 Codex 登录…', async () => {

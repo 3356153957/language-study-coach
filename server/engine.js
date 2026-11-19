@@ -2,7 +2,7 @@ import { AppError, providers, validateConfig, validateAPIConnection, callModel }
 import { listModels } from './model-catalog.js';
 import { goals, modes, skills, prompts, gradingContext, validateTask, validateFeedback, validateLearnerAnswer, validateReport, validateReply, validateDraftAnswer, validateSkippedQuestions, validateExamEstimate } from './coach.js';
 import { validateBackground } from './background.js';
-import { sharedProfile, examEvidence, examOutlook } from './profile.js';
+import { sharedProfile, examEvidence, examOutlook, gateProfile } from './profile.js';
 import { dashboardData, activityData } from './dashboard.js';
 import { exportBackup, planImport } from './backup.js';
 import { canonical, recordsFromBackup, recordKey, reconcile, mergeCloudRecords } from './sync-records.js';
@@ -17,7 +17,7 @@ import { assessmentPrompt, mergeAssessments } from './exam-assessment.js';
 const randomUUID = () => globalThis.crypto.randomUUID();
 export function createEngine({ initialState = { version: 1, config: null, profiles: {}, sessions: [] }, save, modelCall = callModel, modelFetcher = fetch, codex, availableProviders = providers, allowImport = true }) {
   let state = initialState, busy = false;
-  const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary?.slice(0, 140), nextFocus: profile.nextFocus, learningPlans: profile.learningPlans };
+  const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary, nextFocus: profile.nextFocus, learningPlans: profile.learningPlans, updatedAt: profile.updatedAt, live: profile.live };
   const active = s => s.sessions.find(x => !x.finishedAt);
   function recommendations(s) {
     const result={};
@@ -82,8 +82,8 @@ export function createEngine({ initialState = { version: 1, config: null, profil
     s.profile = {
       level: previous?.level || '正在了解你的水平',
       ...(previous?.learningPlans ? { learningPlans: previous.learningPlans } : {}),
-      summary: `已根据最近的${currentSkill}作答更新练习画像；完成更多题目后会继续校准。`,
-      nextFocus: entry.feedback.correct ? `继续练习${currentSkill}，观察在更高难度下是否稳定。` : `再练${currentSkill}中的“${entry.feedback.weakness || '本题知识点'}”，下一题会参考这次表现。`,
+      summary: `${currentSkill}练习 · ${entry.task.prompt.slice(0, 100)}\n${entry.feedback.explanation.slice(0, 1800)}`,
+      nextFocus: entry.feedback.weakness ? `接下来练习${currentSkill}中的“${entry.feedback.weakness}”。` : `继续${currentSkill}练习，尝试新的情境。`,
       skills: skills.map(name => {
         // A live update is still evidence. Keep it when the next answer tests a
         // different skill, otherwise the dashboard appears to forget progress.
@@ -145,12 +145,13 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       return observed.has(item.name) ? item : {name:item.name,level:'未测评',evidence:'还没有该能力的作答记录。'};
     });
     report.examEstimate=null; // Predictions are only requested explicitly by the learner.
+    const gatedReport = gateProfile(evidence, report);
     const now=new Date().toISOString();
-    session.report={...report,updatedAt:recovering ? session.finishedAt : now,...(recovering ? {generatedAt:now} : {})};
+    session.report={...gatedReport,updatedAt:recovering ? session.finishedAt : now,...(recovering ? {generatedAt:now} : {})};
     delete session.reportError;
     const laterEvidence=s.sessions.some(round=>round.history.some(entry=>Date.parse(entry.at)>Date.parse(session.finishedAt)));
     if(!recovering || !laterEvidence && (!currentProfile || Date.parse(currentProfile.updatedAt || 0)<=Date.parse(session.finishedAt))){
-      const {examEstimate,...abilityProfile}=report;
+      const {examEstimate,...abilityProfile}=gatedReport;
       s.profile={...abilityProfile,updatedAt:session.report.updatedAt};
     }
   }
@@ -215,10 +216,22 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       const result=planImport(s,input.backup);
       Object.assign(s,result.state);
       return result.summary;
+    } else if (route === '/api/profile/refresh') {
+      const latest = [...s.sessions].filter(round => round.history.length).sort((a,b) => b.history.at(-1).at.localeCompare(a.history.at(-1).at))[0];
+      if (!latest) throw new AppError('完成一道练习后，就可以生成学习小结。', 409);
+      const previous = sharedProfile(s);
+      const report = validateReport(await modelCall(s.config, prompts.report, { ...context(s, latest), overview: true }));
+      const observed = new Set(s.sessions.flatMap(round => round.history).map(entry => entry.task.skill));
+      s.profile = gateProfile(s, {
+        level: report.level, summary: report.summary, nextFocus: report.nextFocus,
+        skills: report.skills.map(item => observed.has(item.name) ? item : previous?.skills?.find(skill => skill.name === item.name) || { name: item.name, level: '未测评', evidence: '完成这项练习后查看进展。' }),
+        ...(previous?.learningPlans ? { learningPlans: previous.learningPlans } : {}),
+        updatedAt: new Date().toISOString(),
+      });
     } else if (route === '/api/session/report') {
       const session=s.sessions.find(round=>round.id===input.sessionId);
       if(!session?.finishedAt || !session.history.length)throw new AppError('请先完成至少一道题并结束本轮，再生成小结。',409);
-      if(!session.report){
+      if(!session.report || input.regenerate === true){
         try{await writeReport(s,session,true);}
         catch(error){throw error instanceof AppError ? error : new AppError('小结暂未生成，请检查模型连接后重试；已保存的回答没有改变。',502);}
       }

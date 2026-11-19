@@ -58,10 +58,10 @@ test('eligible samples offer manual assessment both before and after a summary',
   const round = { goal: '六级', history };
   const state = { sessions: [round] };
   assert.equal(examOutlook(state)['六级'].status, 'ready');
-  assert.match(examOutlook(state)['六级'].message, /点击后由 AI/);
+  assert.match(examOutlook(state)['六级'].message, /点击更新 AI/);
   round.finishedAt = '2026-11-16'; round.report = { examEstimate: null };
   assert.equal(examOutlook(state)['六级'].status, 'ready');
-  assert.match(examOutlook(state)['六级'].message, /不随学习小结自动更新/);
+  assert.match(examOutlook(state)['六级'].message, /点击更新 AI/);
   assert.equal(examOutlook(state)['四级'].status, 'collecting');
 });
 

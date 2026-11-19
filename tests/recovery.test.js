@@ -18,7 +18,7 @@ test('a missing archived summary can be generated once without regrading answers
   await assert.rejects(engine.execute('/api/session/report',{sessionId:'old'}),/disk full/);
   assert.equal(engine.detail('old').report,null);
   failSave=false;await engine.execute('/api/session/report',{sessionId:'old'});
-  const saved=engine.detail('old');assert.equal(saved.report.level,'A2');assert.equal(saved.report.updatedAt,oldAt);assert.ok(saved.report.generatedAt);assert.equal(saved.reportError,undefined);
+  const saved=engine.detail('old');assert.equal(saved.report.level,'待积累');assert.equal(saved.report.updatedAt,oldAt);assert.ok(saved.report.generatedAt);assert.equal(saved.reportError,undefined);
   assert.equal(saved.history.length,1);assert.equal(saved.history[0].activeSeconds,20);assert.equal(saved.finishedAt,oldAt);
   await engine.execute('/api/session/report',{sessionId:'old'});assert.equal(calls,2,'A repeated successful request is idempotent');
   assert.equal(engine.backup().data.sessions[0].report.generatedAt,saved.report.generatedAt);
@@ -29,7 +29,7 @@ test('retrying an old summary cannot use later answers or replace the newer lear
   const initialState={version:1,config,profile:newer,sessions:[round('old',oldAt),{...round('later',laterAt),report:newer}]};
   const engine=createEngine({initialState,save:async()=>{},modelCall:async(c,p,ctx)=>{assert.ok(!JSON.stringify(ctx).includes('task-later'));assert.notEqual(ctx.profile?.level,'B2');return report('A2');}});
   await engine.execute('/api/session/report',{sessionId:'old'});
-  assert.equal(engine.profile().profile.level,'B2');assert.equal(engine.profile().profile.updatedAt,laterAt);assert.equal(engine.detail('old').report.level,'A2');
+  assert.equal(engine.profile().profile.level,'B2');assert.equal(engine.profile().profile.updatedAt,laterAt);assert.equal(engine.detail('old').report.level,'待积累');
   assert.equal(engine.view({compact:true}).recommendations.四级.sourceSessionId,'later');
 });
 

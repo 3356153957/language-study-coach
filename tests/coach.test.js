@@ -32,7 +32,7 @@ test('switching goals reuses one learner profile and cross-goal history; a new r
   const result = await h.request('session/finish', { sessionId: s.id });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body.profile.skills.find(x => x.name === '语法'), first.skills.find(x => x.name === '语法'));
-  assert.equal(result.body.profile.skills.find(x => x.name === '表达').level, 'A2');
+  assert.equal(result.body.profile.skills.find(x => x.name === '表达').level, '练习中');
   const restored = await harness(t, () => { throw new Error('No model call on reload'); }, h.directory);
   assert.deepEqual((await restored.request('state')).body.profile, result.body.profile);
 });
@@ -280,7 +280,7 @@ test('full placement: hidden answers, adaptive context, idempotent grading, repo
   r = await req('session/finish', { sessionId: s.id });
   assert.equal(r.status, 200);
   assert.equal(r.body.sessions[0].history.reduce((n,x) => n + x.activeSeconds, 0), 72);
-  assert.equal(r.body.profile.skills.find(x => x.name === '听力').level, '未测评');
+  assert.equal(r.body.profile.skills.find(x => x.name === '听力').level, '待积累');
   const reloaded = await harness(t, fake, h.directory);
   assert.deepEqual((await reloaded.request('state')).body, r.body);
   const reviewId = r.body.sessions[0].history[0].id;

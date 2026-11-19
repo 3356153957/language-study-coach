@@ -1,6 +1,41 @@
 import { skills, validateExamEstimate } from './coach.js';
 import { independentCounts } from './answer-results.js';
 
+export const MIN_SKILL_EVIDENCE = 3;
+export const MIN_PROFILE_EVIDENCE = 5;
+
+export function profileEvidence(state) {
+  const counts = Object.fromEntries(skills.map(name => [name, { count: 0, correct: 0 }]));
+  for (const round of state.sessions || []) for (const entry of round.history || []) {
+    const skill = entry.task?.skill;
+    if (!counts[skill]) continue;
+    const result = independentCounts(entry);
+    counts[skill].count += result.count;
+    counts[skill].correct += result.correct;
+  }
+  const total = Object.values(counts).reduce((sum, value) => sum + value.count, 0);
+  return { counts, total, covered: Object.values(counts).filter(value => value.count > 0).length };
+}
+
+export function gateProfile(state, profile) {
+  if (!profile) return profile;
+  const evidence = profileEvidence(state);
+  const levelReady = evidence.total >= MIN_PROFILE_EVIDENCE && evidence.covered >= 3;
+  return {
+    ...profile,
+    level: levelReady ? profile.level : '待积累',
+    skills: skills.map(name => {
+      const item = profile.skills?.find(skill => skill.name === name) || { name };
+      const ready = evidence.counts[name].count >= MIN_SKILL_EVIDENCE;
+      return ready ? item : {
+        ...item,
+        level: evidence.counts[name].count ? '练习中' : '待积累',
+        evidence: evidence.counts[name].count ? `已完成 ${evidence.counts[name].count} 道${name}练习。` : `完成 ${name} 练习后查看进展。`,
+      };
+    }),
+  };
+}
+
 // Retain legacy goal profiles as source records, but expose one learner profile.
 export function sharedProfile(state) {
   if (state.profile) return state.profile;
@@ -59,7 +94,7 @@ export function examOutlook(state) {
     const canAssess = evidence.count > 0;
     const status = estimate ? evidence.ready ? 'estimated' : 'historical' : canAssess ? 'ready' : 'collecting';
     const statusText = estimate ? '最近一次评估' : canAssess ? '点击 AI 评估' : '先积累练习记录';
-    const message = canAssess ? `${estimate ? '保留上次评估。' : ''}点击后由 AI 分析已有练习，不随学习小结自动更新。${evidence.ready ? '' : '目前样本较少，结果仅是初步估计。'}` : '先完成至少一道该目标下的无提示练习，再点击 AI 评估。';
+    const message = canAssess ? '根据最新练习，点击更新 AI 备考评估。' : '完成一道独立练习后，查看 AI 备考评估。';
     return [goal, { ...evidence, canAssess, estimate, previous, change, changeText, status, statusText, message }];
   }));
 }

@@ -33,5 +33,5 @@ export function learningProgress(state, profile, timeZone = 'UTC', now = new Dat
   const otherComparisons = skills.flatMap(name => ['A1','A2','B1','B2','C1','C2'].filter(code => code !== comparisons.find(row => row.name === name).level && cohorts.has(`${name}:${code}`)).map(code => compare(name, code)));
   return { recentStart, previousStart, today, comparisons, otherComparisons,
     levelHistory: levelHistory.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8),
-    note: '只比较同一能力、同一难度、未用提示或原文的回答；两个时间段各至少 5 道小题才显示变化。正确率变化不等于能力等级提升。' };
+    note: '对比相同难度下的独立作答。近 7 天与此前 7 天各完成 5 题后，显示正确率变化。' };
 }

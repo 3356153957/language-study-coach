@@ -33,7 +33,7 @@ test('phone runs a round without a server, persists profile, hides Codex/import 
   await client.request('session/finish', { sessionId });
   const restarted = await createNativeClient({ store, modelCall });
   state = await restarted.request('state');
-  assert.equal(state.profile.level, 'A2');
+  assert.equal(state.profile.level, '待积累');
   assert.equal(state.sessions[0].history.length, 1);
   assert.equal(state.config.apiKey, undefined);
 });

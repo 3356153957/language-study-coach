@@ -94,7 +94,7 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
       if (route === '/api/codex/login') return send(200, await codex.loginStart(input.type));
       if (route === '/api/codex/login/cancel') { await codex.cancelLogin(); return send(200, await codex.status()); }
       const result=await engine.execute(route, input, viewOptions);
-      if(route.startsWith('/api/session/') || route==='/api/data/import' || route==='/api/background/import' || route==='/api/learning-plan' || route.startsWith('/api/vocabulary/') || route==='/api/exam/assess') sync.notifyChange();
+      if(route.startsWith('/api/session/') || route==='/api/data/import' || route==='/api/background/import' || route==='/api/learning-plan' || route.startsWith('/api/vocabulary/') || route==='/api/exam/assess' || route==='/api/profile/refresh') sync.notifyChange();
       send(200,result);
     } catch (error) {
       send(error.status || 500, { error: error instanceof AppError ? error.message : '本地服务处理失败，数据未更新，请检查磁盘空间后重试。' });

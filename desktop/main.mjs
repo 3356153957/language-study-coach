@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, session, shell } from 'electron';
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,8 +32,9 @@ async function loadPublicConfig() {
 async function createWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1280, height: 860, minWidth: 960, minHeight: 680,
-    title: 'Language Study Coach', backgroundColor: '#f7f7f2',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, spellcheck: true },
+    title: 'Language Study Coach', backgroundColor: '#fcfcf8',
+    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#fcfcf8', symbolColor: '#506358', height: 40 } } : {}),
+    webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, spellcheck: true },
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { if (isTrustedExternal(url)) shell.openExternal(url); return { action: 'deny' }; });
   mainWindow.webContents.on('will-navigate', (event, url) => { if (!isLocal(url)) event.preventDefault(); });
@@ -71,6 +72,7 @@ if (!gotLock) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
   app.whenReady().then(async () => {
+    if (process.platform === 'win32') Menu.setApplicationMenu(null);
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(permission === 'media' && isLocal(webContents.getURL())));
     session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => permission === 'media' && isLocal(requestingOrigin || webContents?.getURL() || ''));
     await start();

@@ -1,0 +1,16 @@
+/* Match the app surface while retaining native caption buttons and resize edges. */
+.desktop-shell { --desktop-bar-height:40px; --app-height:calc(100dvh - var(--desktop-bar-height)); }
+.desktop-shell body { padding-top:var(--desktop-bar-height); }
+.desktop-titlebar {
+  position:fixed; top:0; left:env(titlebar-area-x,0px); width:env(titlebar-area-width,calc(100% - 138px));
+  height:var(--desktop-bar-height); display:flex; align-items:center; padding:0 22px;
+  color:#68776f; background:var(--paper); font-size:11px; letter-spacing:.15px;
+  z-index:100; -webkit-app-region:drag; app-region:drag; user-select:none;
+}
+.desktop-shell::before { content:''; position:fixed; inset:0 0 auto; height:var(--desktop-bar-height); background:var(--paper); z-index:99; }
+.desktop-shell .topbar { top:0; }
+.desktop-shell .chat-session { height:calc(100dvh - var(--desktop-bar-height) - 112px); }
+.desktop-shell .welcome-page { min-height:calc(100dvh - var(--desktop-bar-height) - 138px); }
+@media(min-width:1101px) {
+  .desktop-shell .topbar { top:var(--desktop-bar-height); height:calc(100dvh - var(--desktop-bar-height)); }
+}

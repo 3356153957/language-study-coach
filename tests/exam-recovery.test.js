@@ -32,7 +32,7 @@ test('finishing a round without a new estimate retains the old prediction and ex
   await engine.execute('/api/session/finish', { sessionId: 'active' });
   assert.equal(saved.examEstimates['四级']?.high, 60);
   assert.equal(engine.view().examOutlook['四级'].estimate.high, 60);
-  assert.match(engine.view().examOutlook['四级'].message, /保留上次/);
+  assert.match(engine.view().examOutlook['四级'].message, /更新 AI/);
 });
 
 test('manual decimal prediction survives backup, cloud merge and engine restart', async () => {
