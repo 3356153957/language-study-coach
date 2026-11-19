@@ -58,10 +58,20 @@ export function createDesktopServer({ api, staticRoot, onAuthCallback } = {}) {
   });
   return {
     server,
-    listen: () => new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(server.address().port); });
-    }),
+    // Try each candidate in order; only an occupied port moves on to the next.
+    listen: async (ports = [0]) => {
+      for (const [index, port] of ports.entries()) {
+        try {
+          return await new Promise((resolve, reject) => {
+            server.once('error', reject);
+            server.listen(port, '127.0.0.1', () => { server.off('error', reject); resolve(server.address().port); });
+          });
+        } catch (error) {
+          if (error?.code !== 'EADDRINUSE' || index === ports.length - 1) throw error;
+        }
+      }
+      throw new Error('No local port candidates were provided.');
+    },
     close: () => new Promise(resolve => { if (!server.listening) return resolve(); server.close(() => resolve()); }),
   };
 }

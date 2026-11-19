@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createAPI } from '../server/api.js';
 import { validateSyncConfig } from '../server/cloud-sync.js';
 import { createDesktopServer } from './static-server.mjs';
+import { portCandidates, readSavedPort, savePort } from './port.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const isLocal = value => { try { const u = new URL(value); return u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname); } catch { return false; } };
@@ -50,7 +51,12 @@ async function start() {
     turnstileSiteKey: publicConfig.turnstileSiteKey,
   } });
   localServer = createDesktopServer({ api, staticRoot, onAuthCallback: () => { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); } } });
-  const port = await localServer.listen();
+  const portFile = path.join(app.getPath('userData'), 'desktop-port.json');
+  const saved = await readSavedPort(portFile);
+  const port = await localServer.listen(portCandidates(saved));
+  // Remember only the first port. A temporary conflict borrows the next port for
+  // this launch without abandoning the origin that holds the existing drafts.
+  if (saved === null) await savePort(portFile, port).catch(error => console.warn('Desktop port not saved:', error.message));
   await createWindow(port);
 }
 
