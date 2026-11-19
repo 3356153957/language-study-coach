@@ -9,7 +9,7 @@ npm run desktop:dev
 npm run desktop:build
 ```
 
-`desktop:build` 生成 Windows x64 NSIS 安装程序。当前验证包为 `build/desktop/LanguageStudyCoach-Desktop-1.0.0-x64.exe`，未签名；安装前需要在 Windows 的发布者提示中自行确认。私有测试发布：[Windows Desktop 1.0.0](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.0-desktop)。
+`desktop:build` 生成 Windows x64 NSIS 安装程序。当前验证包为 `build/desktop/LanguageStudyCoach-Desktop-1.0.5-x64.exe`，未签名；安装前需要在 Windows 的发布者提示中自行确认。私有发布：[Windows Desktop 1.0.5](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.5-desktop)，附安装包与 SHA-256 清单。
 
 ## 数据和授权
 
@@ -26,3 +26,8 @@ npm run desktop:build
 - 未配置代码签名证书；未验证另一台电脑安装和自动更新。
 - 固定端口（2026-11-19，开发模式）：150 项 Node 测试通过。用 Electron 45.3.4 和临时用户数据目录正常关闭后重启两次，两次都在 41731，写入的 localStorage 与所选目标都保留，重启后直接进入学习概览。用旧版入口做对照，两次端口分别为 1503、11268，重启后 localStorage 为空并回到目标选择页。
 - 1.0.3 安装包（2026-11-19）：NSIS 安装程序构建成功，包内确认含固定端口代码与统一云同步公开配置。用打包后的 `win-unpacked` 程序和临时用户数据目录重启两次，结果同上（41731、数据保留、云同步已配置）。未执行覆盖安装，未验证从 1.0.2 升级。
+
+- 1.0.5 界面更新（2026-11-19）：158 项现有测试通过，界面调整后的相关 23 项及桌面服务 5 项检查通过，Vite 与 Windows x64 NSIS 构建成功。包内核验新版主题、设置二级菜单、固定端口与云同步公开配置，未包含本机学习数据。
+- 在临时用户目录启动打包程序，实际检查新首页、设置分类和键盘切换，关闭重启后保持 41731 端口和学习目标。
+- 已执行本机覆盖安装，安装后的程序包版本与 Windows 卸载注册信息均为 1.0.5，安装目录中的 app.asar 与构建产物校验一致。覆盖安装完成、首次启动前，学习状态文件与升级前备份完全一致。实际启动后检查了学习首页和数据设置；原有 18 个练习会话、85 组作答全部逐条保持不变。已启用的云同步随后补回 6 个会话、30 组作答，同步游标由 91 更新为 157，无同步冲突。
+- 升级前备份位于本地 `.local/backups/desktop-before-1.0.5-20261119/`；安装版截图为 `output/playwright/desktop-105-installed.png`。首次检查时未保存首页目标，按已有记录选择四级；再次重启后直接恢复四级首页，端口保持 41731。未重测真人授权、真实模型批改或完整跨设备同步流程。
