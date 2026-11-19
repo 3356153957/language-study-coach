@@ -6,6 +6,7 @@ import { createDraftStore } from './draft-store.js';
 
 import './style.css';
 import './dashboard.css';
+import './studio.css';
 import { renderDashboard, renderProfile, renderActivity, renderPractice, renderExamAssessment } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
@@ -32,6 +33,7 @@ const presets = [
 let data = null, goal = localStorage.getItem('lsc-goal-v1') || '';
 let screen = goal ? 'home' : 'welcome';
 let busy = '', error = '', notice = '', settingsDraft = null, summaryId = null, draft = {};
+let settingsSection = 'model';
 let detailSession = null, reviewData = null, reviewOffset = 0;
 let reviewFilter = 'all';
 let activityData = null, practiceMode = '听力';
@@ -64,7 +66,8 @@ function paintDraftStatus(){
   if(status){status.innerHTML=draftStatusHTML();status.style.display=draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'none';}
 }
 const persistDraft = (force=false) => {
-  if(current()?.current?.id===draft.taskId)draft.questionCount=taskQuestions(current().current).length;
+  const task = current()?.current;
+  if(task && task.id===draft.taskId)draft.questionCount=taskQuestions(task).length;
   const saved=draftStore.write(draft,{force});
   if(saved && draftStore.lastResult.draft){
     Object.assign(draft,draftStore.lastResult.draft);
@@ -195,13 +198,13 @@ function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFiel
 function updatePanel() { return renderUpdatePanel({state:updateState,esc,button}); }
 function paintSync() {
   const panel=app.querySelector('#sync-panel');
-  if(panel && !panel.contains(document.activeElement) && !busy) panel.outerHTML=syncPanel();
+  if(panel && !panel.contains(document.activeElement) && !busy) { panel.outerHTML=syncPanel(); ensureCaptchaWidget(); }
 }
 async function refreshSync() {
   try {syncStatus=await request('sync/status');if(!captchaSiteKey && syncStatus.turnstileSiteKey) captchaSiteKey=syncStatus.turnstileSiteKey;paintSync();} catch(e) {if(screen==='settings'){error=e.message;render();}}
 }
 function ensureCaptchaWidget() {
-  if (!captchaSiteKey || screen !== 'settings') return;
+  if (!captchaSiteKey || screen !== 'settings' || settingsSection !== 'sync') return;
   const mount=app.querySelector('#sync-captcha'); if(!mount || mount.dataset.rendered==='1') return;
   const renderWidget=()=>{ if(!window.turnstile || !app.contains(mount)) return; mount.dataset.rendered='1'; window.turnstile.render(mount,{sitekey:captchaSiteKey,appearance:'interaction-only',callback:token=>{captchaToken=String(token||'');const send=app.querySelector('[data-action="sync-code"]');if(send)send.disabled=!captchaToken;},'expired-callback':()=>{captchaToken='';const send=app.querySelector('[data-action="sync-code"]');if(send)send.disabled=true;},'error-callback':()=>{captchaToken='';}}); };
   if(window.turnstile) return renderWidget();
@@ -284,6 +287,7 @@ function navigate(target) {
   }
   clearTimeout(codexPolling); clearTimeout(authPoll);
   if (target === 'settings') {
+    settingsSection = 'model';
     settingsDraft = { ...(data?.config || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '' }), apiKey: '' };
     if (settingsDraft.provider === 'codex') refreshCodex();
     if (settingsDraft.provider === 'chatgpt') refreshAuth();
@@ -299,13 +303,19 @@ async function fillWordMeanings(word) {
 function selectGoal(value) { goal = value; localStorage.setItem('lsc-goal-v1', goal); navigate('home'); }
 function render() {
   document.documentElement.classList.toggle('is-practicing', screen === 'session');
-  const navScreen = ['activity','week','summary','practice','exam'].includes(screen) ? 'home' : screen;
+  const navScreen = ['activity','week','summary','practice','exam','session','starting'].includes(screen) ? 'home' : screen;
   const previousLog = app.querySelector('#chat-log');
   const previousScroll = previousLog?.scrollTop || 0;
   const nearEnd = !previousLog || previousLog.scrollHeight - previousScroll - previousLog.clientHeight < 100;
+  const routeLabel = {home:'学习概览',welcome:'选择学习目标',profile:'能力进展',review:'错题回顾',wordbook:'单词本',settings:'设置',activity:'学习记录',week:'近 7 天',summary:'练习回顾',practice:`${practiceMode}练习`,exam:`${examGoal}通过率`}[screen];
   app.innerHTML = `<div class="shell ${screen === 'session' ? 'session-shell' : ''}"><header class="topbar">
-    <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['wordbook','单词本'],['settings','设置']].map(([key, label]) => button(icon({home:'read',profile:'target',review:'history',wordbook:'words',settings:'settings'}[key]) + label, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
+    <button class="studio-brand" data-action="home" aria-label="Language Study Coach 首页"><span class="studio-mark">${icon('read')}</span><span>Language<span>STUDY COACH</span></span></button>
+    <span class="nav-caption">你的学习空间</span>
+    <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['wordbook','单词本'],['settings','设置']].map(([key, label]) => button(icon({home:'mixed',profile:'target',review:'history',wordbook:'words',settings:'settings'}[key]) + `<span>${label}</span><span class="nav-indicator" aria-hidden="true"></span>`, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
+
+    <div class="sidebar-status"><i class="${data?.configured ? 'connected' : ''}"></i>${data?.configured ? '学习模型已配置' : '等待连接学习模型'}</div>
     </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
+      ${routeLabel ? `<div class="workspace-line"><nav class="breadcrumbs" aria-label="页面路径">${['home','welcome'].includes(screen) ? '<span>我的学习空间</span>' : `${button('学习空间','home','breadcrumb-link')}<span aria-hidden="true">/</span><span aria-current="page">${esc(routeLabel)}</span>`}</nav></div>` : ''}
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
       ${screen==='session' && !current()?.feedback ? `<div id="draft-save-status" class="alert error" role="alert" style="${draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'display:none'}">${draftStatusHTML()}</div>` : ''}
@@ -342,15 +352,28 @@ function welcome() {
     <div class="preset-panel"><div class="panel-heading">你想从哪里开始？<span class="muted">随时可以更换</span></div><div class="preset-grid">${presets.map(([name, value, tag, detail, color, icon]) => `<button class="preset-card ${color}" data-action="goal" data-value="${value}" ${busy ? 'disabled' : ''}><span class="card-arrow">↗</span><span class="preset-icon">${icon}</span><span class="preset-text"><span class="preset-eyebrow">${tag}</span><strong>${name}</strong><span>${detail}</span></span></button>`).join('')}</div><div class="panel-footer">四个学习目标 · 一个会逐步了解你的教练</div></div></section>`;
 }
 function home() { return renderDashboard({ data, goal, esc, button, date, demoAnswer }); }
+function showSettingsSection(section) {
+  if (!['model','sync','data','update'].includes(section)) return;
+  settingsSection = section;
+  for (const tab of app.querySelectorAll('[data-action="settings-section"]')) {
+    const selected = tab.dataset.section === section;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  for (const panel of app.querySelectorAll('[data-settings-panel]')) panel.hidden = panel.dataset.settingsPanel !== section;
+  if (section === 'sync') ensureCaptchaWidget();
+}
 function settings() {
   const cfg = settingsDraft || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '', apiKey: '' };
-  return `<section class="settings-page"><span class="eyebrow">MAKE IT YOURS</span><h1>连接你的 <em>AI。</em></h1><p class="lead">选择模型，把它变成了解你的英语教练。</p><div class="settings-grid"><form id="settings-form" class="card-surface settings-form">
+  const tabs = [['model','模型连接','settings'],['sync','云端同步','refresh'],['data','学习数据','read'],...(native ? [['update','应用更新','history']] : [])];
+  const panelAttrs = key => `id="settings-${key}-panel" data-settings-panel="${key}" role="tabpanel" aria-labelledby="settings-${key}-tab" ${settingsSection !== key ? 'hidden' : ''}`;
+  return `<section class="settings-page"><h1>设置</h1><p class="lead">管理模型连接、云端同步与学习数据。</p><nav class="section-tabs" role="tablist" aria-label="设置分类">${tabs.map(([key,label,symbol])=>button(`${icon(symbol)}<span>${label}</span>`,'settings-section','section-tab',`data-section="${key}" id="settings-${key}-tab" role="tab" aria-selected="${settingsSection===key}" aria-controls="settings-${key}-panel" tabindex="${settingsSection===key?0:-1}"`)).join('')}</nav><div ${panelAttrs('model')}><div class="settings-grid"><form id="settings-form" class="card-surface settings-form"><div class="form-section-heading"><span class="form-section-icon">${icon('settings')}</span><div><h2>模型连接</h2><p>让熟悉的 AI，成为你的英语教练。</p></div></div>
     <label>服务商<select name="provider" ${busy ? 'disabled' : ''}>${Object.entries(data.providers).map(([key, p]) => `<option value="${key}" ${cfg.provider === key ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label>
     ${cfg.provider === 'chatgpt' ? renderChatGPTPanel({status:authStatus,loading:authLoading,models:authModels,authURL,cfg,esc,button}) : cfg.provider === 'codex' ? codexPanel(cfg) : `<label>API 地址<input name="baseURL" type="url" required value="${esc(cfg.baseURL)}" placeholder="https://your-provider.example/v1" ${busy ? 'disabled' : ''}></label><p class="field-help">填写基础地址，通常以 /v1 结尾；不包含 /chat/completions。</p>
     <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${sameSavedSource(cfg) && data.config?.hasKey ? '已保存；留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
     ${renderModelPicker({catalog:modelCatalog,cfg,busy,esc,button})}
     <div class="form-actions"><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>保存配置</button>${button('测试已保存的连接', 'test-connection', 'secondary-button', data.configured ? '' : 'disabled')}</div>`}</form>
-    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div>${renderDataSettings({preview:importPreview,esc,button})}${syncPanel()}${native?updatePanel():''}</section>`;
+    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div></div><div ${panelAttrs('sync')}>${syncPanel()}</div><div ${panelAttrs('data')}>${renderDataSettings({preview:importPreview,esc,button})}</div>${native?`<div ${panelAttrs('update')}>${updatePanel()}</div>`:''}</section>`;
 }
 function codexPanel(cfg) {
   const status = codexStatus, login = status?.login;
@@ -446,6 +469,7 @@ app.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
+  if (action === 'settings-section') { showSettingsSection(el.dataset.section); return; }
   if (action === 'draft-use-saved' || action === 'draft-restore-version') {
     const value=action === 'draft-use-saved' ? draftStore.read(draft.taskId) : draftStore.conflicts(draft.taskId)[Number(el.dataset.index)];
     if(value){draft={...value};persistDraft(true);render();}return;
@@ -710,6 +734,13 @@ app.addEventListener('submit', event => {
   run('正在保存本机配置…', async () => { await api('settings', values); settingsDraft = { ...data.config, apiKey: '' }; notice = '配置已保存。可以测试连接，或回到学习页开始练习。'; });
 });
 app.addEventListener('keydown', event => {
+  const tab = event.target.closest?.('[role="tab"][data-action="settings-section"]');
+  if (tab && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
+    event.preventDefault();
+    const tabs = [...app.querySelectorAll('[data-action="settings-section"]')];
+    const index = tabs.indexOf(tab), next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].click(); tabs[next].focus(); return;
+  }
   const card = event.target.closest?.('[data-action][role="link"]');
   if (card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); card.click(); return; }
   if (!event.target.closest('.chat-session') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
