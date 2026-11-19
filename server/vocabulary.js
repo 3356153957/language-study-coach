@@ -26,6 +26,13 @@ export function validateWordMarks(value, round) {
     return { taskId: task.id, word: mark.word, status: mark.status, updatedAt: new Date(mark.updatedAt).toISOString(), ...definition };
   });
 }
+// A local change must sort after the mark it replaces. mergeWordMarks breaks
+// equal timestamps by status (so devices converge), which would otherwise let a
+// "removed" written in the same millisecond beat a re-added word.
+export function laterStamp(...previous) {
+  const latest = Math.max(0, ...previous.map(stamp => Date.parse(stamp)).filter(Number.isFinite));
+  return new Date(Math.max(Date.now(), latest + 1)).toISOString();
+}
 export function mergeWordMarks(a = [], b = []) {
   const map = new Map();
   for (const mark of [...a, ...b]) {

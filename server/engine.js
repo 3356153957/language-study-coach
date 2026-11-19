@@ -10,7 +10,7 @@ import { repairOpenTask } from './question-layout.js';
 import { validateLearningPlan } from './learning-plan.js';
 import { reviewPlan, reviewOverview } from './review-plan.js';
 import { learningProgress } from './learning-progress.js';
-import { wordbook, normalizeWord, passageWords, taskInRound, mergeWordMarks, definitionPrompt } from './vocabulary.js';
+import { wordbook, normalizeWord, passageWords, taskInRound, mergeWordMarks, laterStamp, definitionPrompt } from './vocabulary.js';
 import { assessmentPrompt, mergeAssessments } from './exam-assessment.js';
 
 
@@ -171,7 +171,8 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       if (!task || word.length > 80 || !passageWords(task.passage).some(w => normalizeWord(w) === word)) throw new AppError('请从阅读文章中选择单词。');
       if (!['learning','removed'].includes(input.status)) throw new AppError('请选择有效的单词状态。');
       if ((round.wordMarks?.length || 0) >= 8000 && !round.wordMarks.some(m=>m.taskId===task.id && m.word===word)) throw new AppError('本轮单词标记已达到上限。');
-      round.wordMarks = mergeWordMarks(round.wordMarks, [{ taskId: task.id, word, status: input.status, updatedAt: new Date().toISOString() }]);
+      const existing = (round.wordMarks || []).find(m => m.taskId === task.id && m.word === word);
+      round.wordMarks = mergeWordMarks(round.wordMarks, [{ taskId: task.id, word, status: input.status, updatedAt: laterStamp(existing?.updatedAt) }]);
     } else if (route === '/api/vocabulary/define') {
       if (!Array.isArray(input.words) || !input.words.length || input.words.length>8 || input.words.some(word=>typeof word!=='string') || new Set(input.words).size!==input.words.length) throw new AppError('请选择 1 至 8 个生词获取中文释义。');
       const book=wordbook(s),items=input.words.map(word=>book.find(item=>item.word===word));
@@ -191,7 +192,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       }
     } else if (route === '/api/vocabulary/status') {
       if (!['learning','mastered','removed'].includes(input.status)) throw new AppError('请选择有效的单词状态。');
-      const word = normalizeWord(input.word), updatedAt = new Date().toISOString();
+      const word = normalizeWord(input.word), updatedAt = laterStamp(...s.sessions.flatMap(round => (round.wordMarks || []).filter(mark => mark.word === word).map(mark => mark.updatedAt)));
       if (!wordbook(s).some(item=>item.word===word)) throw new AppError('这个单词已移出单词本，请刷新后重试。',409);
       for (const round of s.sessions) round.wordMarks = (round.wordMarks || []).map(mark => mark.word===word && mark.status!=='removed' ? {...mark,status:input.status,updatedAt} : mark);
     } else if (route === '/api/exam/assess') {

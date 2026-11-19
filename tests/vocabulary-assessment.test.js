@@ -85,3 +85,18 @@ test('passage keeps punctuation and escaped content, and book exposes filtered c
   const book=renderWordbook({data:{wordbook:[{word:'plates',status:'learning',count:1,sources:[{sessionId:'s',goal:'四级',context:'The plates.'}]}]},esc,button:()=>'',query:'PLAT',filter:'learning'});
   assert.match(book,/The plates/);
 });
+
+test('re-adding a word in the same millisecond as removing it keeps the word in the book', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-19T08:00:00.000Z') });
+  const engine = createEngine({ initialState: predictionFixture(), save: async () => {} });
+  await engine.execute('/api/vocabulary/mark', mark);
+  await engine.execute('/api/vocabulary/mark', { ...mark, status: 'removed' });
+  await engine.execute('/api/vocabulary/mark', mark);
+  assert.equal(engine.view().wordbook.length, 1, 'mark → remove → mark at a frozen clock');
+  assert.equal(engine.view().wordbook[0].status, 'learning');
+  await engine.execute('/api/vocabulary/status', { word: 'plates', status: 'removed' });
+  await engine.execute('/api/vocabulary/mark', mark);
+  assert.equal(engine.view().wordbook.length, 1, 'wordbook removal followed by re-marking at a frozen clock');
+  const stamps = engine.backup().data.sessions[0].wordMarks.map(item => item.updatedAt);
+  assert.ok(stamps.every(stamp => Number.isFinite(Date.parse(stamp))), 'timestamps stay valid ISO strings');
+});
