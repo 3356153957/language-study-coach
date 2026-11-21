@@ -17,14 +17,17 @@ on:
         description: '构建并截图检查 iPhone 16 Pro 模拟器'
         type: boolean
         default: false
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
   build:
     runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -70,12 +73,12 @@ jobs:
         env:
           SIGNED: ${{ inputs.signed }}
         run: bash scripts/build-ios.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: language-study-coach-ios-${{ inputs.signed && 'signed' || 'unsigned' }}
           path: build/ios/*.ipa
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: ios-build-logs
@@ -84,7 +87,7 @@ jobs:
       - name: Check iPhone 16 Pro simulator
         if: inputs.simulator
         run: bash scripts/check-ios-simulator.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: inputs.simulator && always()
         with:
           name: iphone16pro-layout
