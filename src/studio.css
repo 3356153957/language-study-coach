@@ -328,3 +328,15 @@ details[open].dash-panel { border-color:#b7c6af; }
   .chat-session .reading-passage { padding:16px; font-size:15px; }.chat-composer { padding:10px 12px; }.composer-header>span { font-size:10px; }.composer-tools { gap:8px; }.chat-bottom { padding-bottom:max(10px,var(--safe-bottom)); }
   .learning-plan .plan-fields { grid-template-columns:1fr; }.learning-plan label { font-size:12px; }.learning-plan>summary { flex-direction:column; }
 }
+
+/* 2026-11-21 界面细节修正 */
+/* 目标卡片的字形标识保持为小方块，不随按钮宽度拉伸成色条。 */
+.preset-icon { display:inline-grid; place-items:center; width:40px; height:40px; border-radius:12px; font-size:18px; line-height:1; margin-bottom:18px; }
+/* 尚无 CEFR 等级时，“待积累”是状态说明而不是等级代码，用小字完整显示在圆环内。 */
+.overall-level>strong.is-pending { font-size:12px; font-weight:600; letter-spacing:.04em; white-space:nowrap; color:var(--muted); }
+.progress-level.is-pending { font-size:18px; white-space:nowrap; color:var(--muted); }
+/* 通过率尚未评估时，状态文字不按数据大字号展示。 */
+.dash-exam>strong.exam-status.is-pending { font-size:16px; font-weight:600; color:var(--muted); margin:8px 0 12px; }
+.exam-evidence { word-break:keep-all; }
+/* 小题下方的“这问不会”紧跟选项，去掉通用文字按钮的大段上边距。 */
+.answer-field-tools .text-button { margin-top:0; padding-top:4px; padding-bottom:4px; }

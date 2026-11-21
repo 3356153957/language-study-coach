@@ -8,7 +8,8 @@
   z-index:100; -webkit-app-region:drag; app-region:drag; user-select:none;
 }
 .desktop-shell::before { content:''; position:fixed; inset:0 0 auto; height:var(--desktop-bar-height); background:var(--paper); z-index:99; }
-.desktop-shell .topbar { top:0; }
+/* The sticky topbar (medium widths) must stop below the fixed caption bar, not under it. */
+.desktop-shell .topbar { top:var(--desktop-bar-height); }
 .desktop-shell .chat-session { height:calc(100dvh - var(--desktop-bar-height) - 112px); }
 .desktop-shell .welcome-page { min-height:calc(100dvh - var(--desktop-bar-height) - 138px); }
 @media(min-width:1101px) {

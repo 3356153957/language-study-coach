@@ -95,3 +95,24 @@ test('daily totals use learner timezone and seven distinct calendar days across 
   assert.equal(totals.all.correct, 1); assert.equal(totals.all.seconds, 60);
   assert.equal(dashboardData({ sessions }, 'Invalid/Zone', now).totals.all.days[6].count, 1);
 });
+
+test('empty dashboard uses compact pending styles and hides the due-review link until something is due', () => {
+  const data = makeEngine([]).view({ compact: true });
+  const button = (label, action) => `<button data-action="${action}">${label}</button>`;
+  const html = renderDashboard({ data, goal: '四级', esc: String, button, date: String });
+  assert.match(html, /<strong class="is-pending">待积累<\/strong>/);
+  assert.match(html, /<strong class="exam-status is-pending">先积累练习记录<\/strong>/);
+  assert.match(html, /0 个知识点到期复习/);
+  assert.doesNotMatch(html, /查看到期复习/);
+  assert.match(renderProfile({ data, goal: '四级', esc: String, button, date: String }), /<span class="progress-level is-pending">待积累<\/span>/);
+});
+
+test('due reviews keep the shortcut and a measured level keeps the large display style', () => {
+  const data = makeEngine([]).view({ compact: true });
+  data.reviews = { ...(data.reviews || {}), 四级: { dueCount: 2, scheduledCount: 2, items: [] } };
+  data.profile = { ...(data.profile || {}), level: 'B1', skills: [] };
+  const button = (label, action) => `<button data-action="${action}">${label}</button>`;
+  const html = renderDashboard({ data, goal: '四级', esc: String, button, date: String });
+  assert.match(html, /查看到期复习/);
+  assert.match(html, /<strong class="">B1<\/strong>/);
+});

@@ -27,7 +27,7 @@ const app = document.querySelector('#app');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const presets = [
   ['四六级', '四级', 'CET-4 / CET-6', '循序补齐考试需要的英语能力', 'violet', 'Aa'],
-  ['高中英语', '高中英语', 'HIGH SCHOOL', '读懂长句，学会准确地表达', 'orange', '↗'],
+  ['高中英语', '高中英语', 'HIGH SCHOOL', '读懂长句，学会准确地表达', 'orange', '¶'],
   ['初中英语', '初中英语', 'MIDDLE SCHOOL', '从基础词汇和句型开始', 'blue', 'ab'],
   ['日常英语', '日常英语', 'EVERYDAY ENGLISH', '听懂、开口，在生活里用起来', 'green', 'Hi'],
 ];
@@ -128,11 +128,17 @@ async function request(path, body) {
     nativeClient ||= import('./native-client.js').then(m => m.createNativeClient({ compact: true, timeZone })).catch(e => { nativeClient = null; throw e; });
     return (await nativeClient).request(path, body);
   }
-  const res = await fetch(`/api/${path}${path.includes('?') ? '&' : '?'}compact=1&tz=${encodeURIComponent(timeZone)}`, body === undefined ? { cache: 'no-store' } : {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Coach-Request': '1' }, body: JSON.stringify(body),
-  });
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error || '本地服务暂时不可用。');
+  // Browser network and parse errors ("Failed to fetch", "Unexpected token <") are
+  // not meaningful to learners; every caller shows request errors directly.
+  let res, result;
+  try {
+    res = await fetch(`/api/${path}${path.includes('?') ? '&' : '?'}compact=1&tz=${encodeURIComponent(timeZone)}`, body === undefined ? { cache: 'no-store' } : {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Coach-Request': '1' }, body: JSON.stringify(body),
+    });
+  } catch { throw new Error('无法连接本地学习服务。请确认应用仍在运行（开发模式下确认 npm run dev 未退出）后重试。'); }
+  try { result = await res.json(); }
+  catch { throw new Error(res.ok ? '本地学习服务返回了无法识别的内容，请重试。' : `本地学习服务暂时不可用（HTTP ${res.status}），请稍后重试。`); }
+  if (!res.ok) throw new Error(result?.error || '本地服务暂时不可用。');
   return result;
 }
 function sameSavedSource(cfg) {

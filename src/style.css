@@ -4,7 +4,8 @@
 * { box-sizing: border-box; }
 :root { --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px); --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px); --header-height:76px; --app-height:100dvh; }
 html { padding:0; overflow-x:hidden; overscroll-behavior-x:none; }
-body { padding:0; overflow-x:hidden; overscroll-behavior-x:none; }
+/* clip instead of hidden: hidden would make body a scroll container that never scrolls, which disables the sticky topbar. */
+body { padding:0; overflow-x:clip; overscroll-behavior-x:none; }
 .starting-page { min-height:60dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; text-align:center; }
 .starting-page h1 { font-size:clamp(26px,5vw,40px); line-height:1.3; letter-spacing:-.03em; }
 .starting-page h1:focus { outline:none; }
