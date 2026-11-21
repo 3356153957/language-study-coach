@@ -340,3 +340,11 @@ details[open].dash-panel { border-color:#b7c6af; }
 .exam-evidence { word-break:keep-all; }
 /* 小题下方的“这问不会”紧跟选项，去掉通用文字按钮的大段上边距。 */
 .answer-field-tools .text-button { margin-top:0; padding-top:4px; padding-bottom:4px; }
+/* 计时说明跟在计时后同一行，窄屏时自然换行，不单独占一行。 */
+.practice-timing small { display:inline; margin-left:6px; }
+.practice-timing small::before { content:'· '; }
+/* 窄屏手机：消息已有“英语教练 / 你”标签和左右对齐区分，隐藏装饰性头像，让题目和材料用满整行宽度。 */
+@media(max-width:480px) {
+  .chat-avatar { display:none; }
+  .chat-message-content { max-width:100%; }
+}

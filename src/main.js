@@ -322,7 +322,7 @@ function render() {
 
     <div class="sidebar-status"><i class="${data?.configured ? 'connected' : ''}"></i>${data?.configured ? '学习模型已配置' : '等待连接学习模型'}</div>
     </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
-      ${routeLabel ? `<div class="workspace-line"><nav class="breadcrumbs" aria-label="页面路径">${['home','welcome'].includes(screen) ? '<span>我的学习空间</span>' : `${button('学习空间','home','breadcrumb-link')}<span aria-hidden="true">/</span><span aria-current="page">${esc(routeLabel)}</span>`}</nav></div>` : ''}
+      ${routeLabel && !['home','welcome'].includes(screen) ? `<div class="workspace-line"><nav class="breadcrumbs" aria-label="页面路径">${button('学习空间','home','breadcrumb-link')}<span aria-hidden="true">/</span><span aria-current="page">${esc(routeLabel)}</span></nav></div>` : ''}
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
       ${screen==='session' && !current()?.feedback ? `<div id="draft-save-status" class="alert error" role="alert" style="${draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'display:none'}">${draftStatusHTML()}</div>` : ''}
