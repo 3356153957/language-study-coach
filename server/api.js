@@ -7,6 +7,23 @@ import { createChatGPTAuth } from './chatgpt-auth.js';
 import { backupLimit } from './backup.js';
 import { createCloudSync } from './cloud-sync.js';
 
+// Collect raw bytes and decode once: decoding each chunk separately turns a
+// UTF-8 character split across chunk boundaries into U+FFFD replacement marks.
+export async function readJSONBody(req, limit) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+    size += bytes.length;
+    if (size > limit) throw new AppError('请求内容过长。', 413);
+    chunks.push(bytes);
+  }
+  let input;
+  try { input = JSON.parse(Buffer.concat(chunks, size).toString('utf8')); } catch { throw new AppError('请求不是有效 JSON。'); }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('请求格式不正确。');
+  return input;
+}
+
 export async function createAPI({ directory, modelCall, modelFetcher = fetch, codex = new CodexBridge({ directory }), chatgpt, syncOptions={} } = {}) {
   chatgpt ||= createChatGPTAuth({
     load:async()=>{try{return JSON.parse(await readFile(path.join(directory,'chatgpt-auth.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new AppError('ChatGPT 授权文件无法读取。');}},
@@ -74,12 +91,7 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
         if (busy) throw new AppError('正在处理上一项请求，请稍后重试。', 409);
         busy = true; ownsLock = true;
       }
-      let raw = '';
-      const limit=route.startsWith('/api/data/')?backupLimit+1000:100000;
-      for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) throw new AppError('请求内容过长。', 413); }
-      let input;
-      try { input = JSON.parse(raw); } catch { throw new AppError('请求不是有效 JSON。'); }
-      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('请求格式不正确。');
+      const input = await readJSONBody(req, route.startsWith('/api/data/') ? backupLimit + 1000 : 100000);
       if (route === '/api/settings/models') return send(200, await engine.models(input));
       if(route.startsWith('/api/sync/')) {
         const result=await sync.action(route.slice('/api/sync/'.length),input);
