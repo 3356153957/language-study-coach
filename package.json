@@ -38,11 +38,16 @@
     "appId": "com.languagestudycoach.desktop",
     "productName": "Language Study Coach",
     "asar": true,
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "files": [
       "dist/**/*",
       "desktop/**/*",
       "server/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/@capacitor/**"
     ],
     "directories": {
       "output": "build/desktop"
