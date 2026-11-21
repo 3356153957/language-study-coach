@@ -62,9 +62,15 @@ function nextTask(ctx) {
 }
 
 const upstream = createHTTPServer(async (req, res) => {
-  let raw = ''; for await (const chunk of req) raw += chunk;
-  let result;
-  const body = JSON.parse(raw), ctx = JSON.parse(body.messages.at(-1).content), system = body.messages[0].content;
+  // Model discovery lists the single fixture model, like a real compatible provider.
+  if (req.method === 'GET' && new URL(req.url, 'http://fixture').pathname.endsWith('/models')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ object: 'list', data: [{ id: 'fixture', object: 'model' }] }));
+  }
+  const chunks = []; for await (const chunk of req) chunks.push(chunk);
+  let result, body, ctx, system;
+  try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); ctx = JSON.parse(body.messages.at(-1).content); system = body.messages[0].content; }
+  catch { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: { message: 'fixture expects a chat completion request' } })); }
   if (ctx.action === 'connection-test') result = { ok: true };
   else if (system === prompts.grade || system === prompts.gradeAndNext) {
     const items = ctx.task.questions?.length ? ctx.task.questions : [{ options: ctx.task.options, answer: ctx.task.answer }];
