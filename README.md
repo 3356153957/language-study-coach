@@ -6,11 +6,30 @@
 
 覆盖四六级（四级 / 六级按真题题型出题并估计通过率）、高中、初中和日常英语四类目标，支持听力、阅读、写作、翻译与对话练习，以及中文单词本、错题回顾和可选的云同步。
 
+## 界面预览
+
+以下为桌面布局截图，使用示例学习数据。
+
+![学习概览，包含继续练习、专项练习、能力画像和近 7 天记录](docs/screenshots/study-dashboard.png)
+
+<details>
+<summary>查看写作批改和学习进展</summary>
+
+### 写作批改
+
+![写作练习的题目、作答、教练反馈和修改建议](docs/screenshots/writing-feedback.png)
+
+### 学习进展
+
+![学习小结、五项能力分级和听力练习建议](docs/screenshots/learning-progress.png)
+
+</details>
+
 ## 下载与版本
 
 | 平台 | 当前版本 | 说明 |
 | --- | --- | --- |
-| Windows 桌面版 | [1.0.9](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.9-desktop) | NSIS 安装包，自带本机服务，未签名。见 [桌面版说明](docs/desktop.md) |
+| Windows 桌面版 | [1.0.10](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.10-desktop) | NSIS 安装包，自带本机服务，未签名。见 [桌面版说明](docs/desktop.md) |
 | iOS（SwiftUI） | [2.0.2](https://github.com/3356153957/language-study-coach/releases/tag/v2.0.2)（预发布） | 未签名 IPA，安装前需自行签名，真机升级尚待验证；见 [SwiftUI 手机端](docs/ios-swiftui.md) |
 | 网页 / 开发版 | `main` 分支 | 本机运行，见下方「本地运行」 |
 
@@ -87,7 +106,7 @@ npm run desktop:build  # 生成 Windows NSIS 安装程序
 
 ### 使用本机 Codex
 
-1. 安装官方 Codex CLI，使其在 PATH 中可用。本机已用 `codex-cli 0.162.1` 验证。
+1. 安装官方 Codex CLI。Windows 会查找 npm 的默认用户安装目录。其他安装位置可加入 `PATH`，或在启动应用前用 `CODEX_CLI_PATH` 指定可执行文件。本机已用 `codex-cli 0.162.1` 验证。
 2. 进入「模型设置 → 本机 Codex」。已在 Codex 中登录 ChatGPT 时，页面直接显示已授权状态和脱敏账户。
 3. 未登录时选择「ChatGPT 授权登录」，点击官方链接，在官方页面完成登录，再回到学习软件。也可选择「使用设备码登录」。页面自动检查完成状态，可取消未完成的授权。
 4. 选择学习模型或保留 Codex 默认模型，点击「使用这个 Codex」，再测试连接。

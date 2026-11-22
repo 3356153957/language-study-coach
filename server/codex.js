@@ -6,13 +6,19 @@ import { AppError, parseJSON } from './providers.js';
 import { prompts } from './coach.js';
 
 // Use Codex's own account APIs. Never read, copy or return auth.json / tokens.
-async function executable() {
-  const candidates = process.env.CODEX_CLI_PATH ? [process.env.CODEX_CLI_PATH] : [];
-  for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
+export async function resolveCodexExecutable(env = process.env) {
+  const candidates = env.CODEX_CLI_PATH ? [env.CODEX_CLI_PATH] : [];
+  const directories = (env.PATH || '').split(path.delimiter).filter(Boolean);
+  if (process.platform === 'win32' && env.APPDATA) directories.push(path.join(env.APPDATA, 'npm'));
+  for (const dir of new Set(directories)) {
     candidates.push(path.join(dir, process.platform === 'win32' ? 'codex.exe' : 'codex'));
     if (process.platform === 'win32') {
       const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
-      candidates.push(path.join(dir, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', `codex-win32-${process.arch}`, 'vendor', `${arch}-pc-windows-msvc`, 'codex', 'codex.exe'));
+      const npmScope = path.join(dir, 'node_modules', '@openai');
+      for (const scope of [path.join(npmScope, 'codex', 'node_modules', '@openai'), npmScope]) {
+        const vendor = path.join(scope, `codex-win32-${process.arch}`, 'vendor', `${arch}-pc-windows-msvc`);
+        candidates.push(path.join(vendor, 'bin', 'codex.exe'), path.join(vendor, 'codex', 'codex.exe'));
+      }
     }
   }
   for (const file of candidates) { try { await access(file); return file; } catch { /* Try next install. */ } }
@@ -49,7 +55,7 @@ export class CodexBridge {
   async start() {
     await mkdir(this.directory, { recursive: true });
     const args = ['app-server', '--listen', 'stdio://', ...Object.entries(safeConfig).flatMap(([key, value]) => ['-c', `${key}=${JSON.stringify(value)}`])];
-    this.child = this.launch ? this.launch(args) : spawn(await executable(), args, { cwd: this.directory, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    this.child = this.launch ? this.launch(args) : spawn(await resolveCodexExecutable(), args, { cwd: this.directory, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     const child = this.child;
     child.stderr.on('data', () => {}); // Diagnostics can contain private local configuration.
     child.stdin.on('error', () => this.disconnect(child));

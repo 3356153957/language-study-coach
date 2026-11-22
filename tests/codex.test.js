@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
-import { CodexBridge, officialURL } from '../server/codex.js';
+import { CodexBridge, officialURL, resolveCodexExecutable } from '../server/codex.js';
 import { createAPI } from '../server/api.js';
 import { validateConfig } from '../server/providers.js';
 import { prompts } from '../server/coach.js';
@@ -44,6 +44,28 @@ async function fixture(t, options = {}) {
   t.after(() => bridge.close());
   return { bridge, directory, calls, send, setLoggedIn: value => { loggedIn = value; } };
 }
+
+test('Windows discovers current and legacy npm Codex binaries without a CLI override', { skip: process.platform !== 'win32' }, async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'lsc-codex-path-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
+  const override = path.join(directory, 'codex.exe');
+  await writeFile(override, '');
+
+  for (const [name, layout, nested] of [['current', 'bin', true], ['legacy', 'codex', true], ['hoisted', 'bin', false]]) {
+    const appData = path.join(directory, name);
+    const npm = path.join(appData, 'npm');
+    const scope = path.join(npm, 'node_modules', '@openai');
+    const packageScope = nested ? path.join(scope, 'codex', 'node_modules', '@openai') : scope;
+    const executable = path.join(packageScope, `codex-win32-${process.arch}`, 'vendor', `${arch}-pc-windows-msvc`, layout, 'codex.exe');
+    await mkdir(path.dirname(executable), { recursive: true });
+    await writeFile(executable, '');
+
+    assert.equal(await resolveCodexExecutable({ PATH: npm }), executable, name);
+    assert.equal(await resolveCodexExecutable({ APPDATA: appData }), executable, name);
+    assert.equal(await resolveCodexExecutable({ PATH: npm, CODEX_CLI_PATH: override }), override, name);
+  }
+});
 
 test('Codex reuses login, masks account, returns a model list and never exposes auth tokens', async t => {
   const { bridge, calls } = await fixture(t);
