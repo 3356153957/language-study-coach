@@ -9,7 +9,7 @@ npm run desktop:dev
 npm run desktop:build
 ```
 
-`desktop:build` 生成 Windows x64 NSIS 安装程序。当前验证包为 `build/desktop/LanguageStudyCoach-Desktop-1.0.7-x64.exe`，未签名；安装前需要在 Windows 的发布者提示中自行确认。私有发布：[Windows Desktop 1.0.7](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.7-desktop)，附安装包与 SHA-256 清单。
+`desktop:build` 生成 Windows x64 NSIS 安装程序。当前验证包为 `build/desktop/LanguageStudyCoach-Desktop-1.0.8-x64.exe`，未签名；安装前需要在 Windows 的发布者提示中自行确认。私有发布：[Windows Desktop 1.0.8](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.8-desktop)，附安装包与 SHA-256 清单。
 
 ## 数据和授权
 
@@ -34,3 +34,4 @@ npm run desktop:build
 
 - 1.0.6（2026-11-19）：修复 Windows 桌面标题栏与菜单栏视觉不一致，保留原生窗口按钮和拖动区域；学习小结改为按最新作答调用 AI 更新；新账户在独立证据不足时显示“待积累/练习中”，不会因一次空白或随便作答显示 A2。162 项 Node 测试、Vite 构建和打包程序实际启动检查通过。覆盖安装后 24 个练习会话、115 组作答逐条保留。
 - 1.0.7（2026-11-21）：界面细节与稳定性修复——目标卡片图标、能力圆环“待积累”、通过率空状态、无到期复习时隐藏入口、中等宽度顶栏固定、选词填空间距、手机对话区宽度、计时说明单行、网络错误中文提示，以及导入备份时跨分块中文被写坏的问题。167 项 Node 测试、Vite 构建和 Windows x64 NSIS 构建通过。包内核验版本 1.0.7、统一云同步公开配置和上述样式，未包含本机学习数据或 `.env`。用打包后的 `win-unpacked` 程序和临时用户数据目录启动：端口 41731、页面与本地 API 正常、云同步显示已配置。未执行本机覆盖安装，未验证从 1.0.6 升级后的数据保留、真实模型批改或跨设备同步。
+- 1.0.8（2026-11-22）：只打包中文与英文 Chromium 语言包，并排除仅 iOS 使用的 Capacitor 依赖。安装包 116.6 MB → 108.3 MB，安装后体积 366 MB → 318 MB，功能不变。167 项 Node 测试通过；包内核验版本 1.0.8、仅含 zh-CN / en-US 语言包、统一云同步公开配置且无本机数据；临时用户目录启动后页面与本地 API 正常、云同步显示已配置。

@@ -10,7 +10,7 @@
 
 | 平台 | 当前版本 | 说明 |
 | --- | --- | --- |
-| Windows 桌面版 | [1.0.7](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.7-desktop) | NSIS 安装包，自带本机服务，未签名；见 [桌面版说明](docs/desktop.md) |
+| Windows 桌面版 | [1.0.8](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.8-desktop) | NSIS 安装包，自带本机服务，未签名；见 [桌面版说明](docs/desktop.md) |
 | iOS（SwiftUI） | [2.0.2](https://github.com/3356153957/language-study-coach/releases/tag/v2.0.2)（预发布） | 未签名 IPA，安装前需自行签名，真机升级尚待验证；见 [SwiftUI 手机端](docs/ios-swiftui.md) |
 | 网页 / 开发版 | `main` 分支 | 本机运行，见下方「本地运行」 |
 
