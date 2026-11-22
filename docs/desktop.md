@@ -9,7 +9,9 @@ npm run desktop:dev
 npm run desktop:build
 ```
 
-`desktop:build` 生成 Windows x64 NSIS 安装程序。当前验证包为 `build/desktop/LanguageStudyCoach-Desktop-1.0.8-x64.exe`，未签名；安装前需要在 Windows 的发布者提示中自行确认。私有发布：[Windows Desktop 1.0.8](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.8-desktop)，附安装包与 SHA-256 清单。
+`desktop:build` 生成 Windows x64 NSIS 安装程序。安装包未签名，Windows 可能提示发布者未知。[Windows 1.0.9 发布页](https://github.com/3356153957/language-study-coach/releases/tag/v1.0.9-desktop)附安装包和 SHA-256 校验清单。
+
+在「设置 → 应用更新」可以查看当前版本并检查 GitHub 上最新的 Windows 正式版。找到新版后，打开发布页下载并运行安装程序即可。
 
 ## 数据和授权
 

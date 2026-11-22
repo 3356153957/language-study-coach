@@ -43,8 +43,20 @@ export function renderSyncPanel({status:s,fields:f,preview,activity,error='',esc
     </section>`;
 }
 
-export function renderUpdatePanel({state:u,esc,button}) {
-  return `<section class="settings-data dash-panel update-panel" aria-label="应用更新"><div class="sync-heading"><h2>应用更新</h2><span class="sync-badge">iOS</span></div><p>从 GitHub 检查 Language Study Coach 的最新版本。私有仓库需要在 GitHub 中登录后查看发布页。</p>${u?.status==='loading'?'<p role="status"><span class="spinner"></span>正在检查更新…</p>':''}${u?.error?`<p class="sync-warning" role="alert">${esc(u.error)}</p>`:''}${u?.data?`<p class="field-help">当前版本 ${esc(u.data.current)} · GitHub 最新版本 ${esc(u.data.latest)}</p><p class="update-result" role="status">${u.data.updateAvailable?'发现新版本，请打开发布页下载。':'当前已经是最新版本。'}</p>${u.data.releaseUrl?`<a class="secondary-button update-link" href="${esc(u.data.releaseUrl)}" target="_blank" rel="noopener noreferrer">打开 GitHub 发布页 ↗</a>`:''}`:''}<div class="form-actions">${button('检查更新','app-update-check','secondary-button',u?.status==='loading'?'disabled':'')}</div></section>`;
+export function renderUpdatePanel({state,platform,currentVersion,releasesPage,esc,button}) {
+  const {status,error,data} = state;
+  const version = data?.current || currentVersion;
+  const releaseLink = data?.updateAvailable ? data.releaseUrl : error ? releasesPage : '';
+  return `<section class="settings-data dash-panel update-panel" aria-label="应用更新">
+    <div class="sync-heading"><h2>应用更新</h2><span class="sync-badge">${esc(platform)}</span></div>
+    ${version ? `<p class="field-help">当前版本 ${esc(version)}${data ? ` · GitHub 最新版本 ${esc(data.latest)}` : ''}</p>` : ''}
+    ${status === 'loading' ? '<p role="status"><span class="spinner"></span>正在检查更新…</p>' : ''}
+    ${error ? `<p class="sync-warning" role="alert">${esc(error)}</p>` : ''}
+    ${data ? `<p class="update-result" role="status">${data.updateAvailable ? '发现新版本，可前往 GitHub 下载。' : '当前已是最新版本。'}</p>` : ''}
+    <div class="form-actions">${button('检查更新','app-update-check','secondary-button',status === 'loading' ? 'disabled' : '')}
+      ${releaseLink ? `<a class="secondary-button update-link" href="${esc(releaseLink)}" target="_blank" rel="noopener noreferrer">打开 GitHub 发布页 ↗</a>` : ''}
+    </div>
+  </section>`;
 }
 
 export function renderChatGPTPanel({status,loading,models,authURL,cfg,esc,button}) {

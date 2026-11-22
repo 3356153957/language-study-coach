@@ -11,8 +11,12 @@ import './desktop-shell.js';
 import { renderDashboard, renderProfile, renderActivity, renderPractice, renderExamAssessment } from './dashboard.js';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { renderDataSettings, renderChatGPTPanel, renderSyncPanel, renderUpdatePanel, renderModelPicker, renderModelOptions } from './settings-panels.js';
+import { version as desktopVersion } from '../package.json';
+import { checkWindowsRelease, releasesPage } from './update.js';
 const deviceBridge = registerPlugin('StudyDevice');
 const native = Capacitor.isNativePlatform();
+const windowsDesktop = window.desktopShell?.customTitleBar === true;
+const supportsAppUpdate = native || windowsDesktop;
 document.documentElement.classList.toggle('native-app', native);
 if (native) document.querySelector('meta[name="viewport"]').content += ', maximum-scale=1.0, user-scalable=no';
 const defaultProvider = native ? 'openai' : 'codex';
@@ -202,7 +206,12 @@ async function refreshAuth() {
   }
 }
 function syncPanel() { return renderSyncPanel({status:syncStatus,fields:syncFields,preview:syncPreview,error:syncError,activity:/同步|验证码|邮箱/.test(busy)?busy:'',esc,button,captchaSiteKey,captchaToken}); }
-function updatePanel() { return renderUpdatePanel({state:updateState,esc,button}); }
+function updatePanel() {
+  return renderUpdatePanel({
+    state:updateState, platform:windowsDesktop ? 'Windows' : 'iOS',
+    currentVersion:windowsDesktop ? desktopVersion : '', releasesPage, esc, button,
+  });
+}
 function paintSync() {
   const panel=app.querySelector('#sync-panel');
   if(panel && !panel.contains(document.activeElement) && !busy) { panel.outerHTML=syncPanel(); ensureCaptchaWidget(); }
@@ -219,8 +228,12 @@ function ensureCaptchaWidget() {
   captchaScriptPromise.then(renderWidget).catch(()=>{});
 }
 async function checkAppUpdate() {
+  if (!supportsAppUpdate || updateState.status === 'loading') return;
   updateState={status:'loading',error:'',data:null}; render();
-  try { updateState={status:'ready',error:'',data:await request('app/update')}; }
+  try {
+    const result = windowsDesktop ? await checkWindowsRelease({currentVersion:desktopVersion}) : await request('app/update');
+    updateState={status:'ready',error:'',data:result};
+  }
   catch(e) { updateState={status:'error',error:e.message,data:null}; }
   render();
 }
@@ -373,7 +386,7 @@ function showSettingsSection(section) {
 }
 function settings() {
   const cfg = settingsDraft || { provider: defaultProvider, baseURL: native ? 'https://api.openai.com/v1' : '', model: '', apiKey: '' };
-  const tabs = [['model','模型连接','settings'],['sync','云端同步','refresh'],['data','学习数据','read'],...(native ? [['update','应用更新','history']] : [])];
+  const tabs = [['model','模型连接','settings'],['sync','云端同步','refresh'],['data','学习数据','read'],...(supportsAppUpdate ? [['update','应用更新','history']] : [])];
   const panelAttrs = key => `id="settings-${key}-panel" data-settings-panel="${key}" role="tabpanel" aria-labelledby="settings-${key}-tab" ${settingsSection !== key ? 'hidden' : ''}`;
   return `<section class="settings-page"><h1>设置</h1><p class="lead">管理模型连接、云端同步与学习数据。</p><nav class="section-tabs" role="tablist" aria-label="设置分类">${tabs.map(([key,label,symbol])=>button(`${icon(symbol)}<span>${label}</span>`,'settings-section','section-tab',`data-section="${key}" id="settings-${key}-tab" role="tab" aria-selected="${settingsSection===key}" aria-controls="settings-${key}-panel" tabindex="${settingsSection===key?0:-1}"`)).join('')}</nav><div ${panelAttrs('model')}><div class="settings-grid"><form id="settings-form" class="card-surface settings-form"><div class="form-section-heading"><span class="form-section-icon">${icon('settings')}</span><div><h2>模型连接</h2><p>让熟悉的 AI，成为你的英语教练。</p></div></div>
     <label>服务商<select name="provider" ${busy ? 'disabled' : ''}>${Object.entries(data.providers).map(([key, p]) => `<option value="${key}" ${cfg.provider === key ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label>
@@ -381,7 +394,7 @@ function settings() {
     <label>API Key<input name="apiKey" type="password" autocomplete="off" value="${esc(cfg.apiKey)}" placeholder="${sameSavedSource(cfg) && data.config?.hasKey ? '已保存；留空可继续使用' : '粘贴你的 API Key'}" ${busy ? 'disabled' : ''}></label>
     ${renderModelPicker({catalog:modelCatalog,cfg,busy,esc,button})}
     <div class="form-actions"><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>保存配置</button>${button('测试已保存的连接', 'test-connection', 'secondary-button', data.configured ? '' : 'disabled')}</div>`}</form>
-    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div></div><div ${panelAttrs('sync')}>${syncPanel()}</div><div ${panelAttrs('data')}>${renderDataSettings({preview:importPreview,esc,button})}</div>${native?`<div ${panelAttrs('update')}>${updatePanel()}</div>`:''}</section>`;
+    <aside class="settings-note"><span class="note-symbol">✦</span><h2>${cfg.provider === 'chatgpt' ? '使用 ChatGPT 订阅，<br>开始学英语。' : cfg.provider === 'codex' ? '用已经熟悉的 Codex，<br>开始学英语。' : '一个接口，完整学习流程。'}</h2>${cfg.provider === 'chatgpt' ? '<p>在系统浏览器的官方页面授权。登录身份会经过校验，账号凭据单独保存在当前设备。</p><p>出题、批改和追问会使用你的订阅额度。可以在 ChatGPT 设置中管理或撤销本应用的授权。</p>' : cfg.provider === 'codex' ? '<p>复用这台电脑上 Codex 的登录状态，无需填写 API Key。未登录时，在官方页面完成 ChatGPT 授权即可。</p><p>授权凭据由 Codex 管理，学习软件不复制令牌。新授权会用于这台电脑共享的 Codex 登录。</p><p>出题与批改使用你的 Codex 账户额度。学习内容会发给 OpenAI；此接入用于本地个人版。</p>' : '<p>AI 负责出题、批改、解释和安排下一题。兼容接口可用于供应商提供的 OpenAI 兼容服务。</p><p>密钥与学习记录保存在当前设备，学习内容只发送给你选择的模型服务商。</p><p>学习内容会发送给所选供应商，按其 API 用量计费。</p>'}<p>${native ? '听力使用系统英语语音。语音输入使用 iPhone 键盘听写，确认文字后再提交。' : '听力使用系统英语语音。浏览器语音输入转成文字后可编辑再提交，可能使用浏览器厂商的语音服务。'}</p></aside></div></div><div ${panelAttrs('sync')}>${syncPanel()}</div><div ${panelAttrs('data')}>${renderDataSettings({preview:importPreview,esc,button})}</div>${supportsAppUpdate?`<div ${panelAttrs('update')}>${updatePanel()}</div>`:''}</section>`;
 }
 function codexPanel(cfg) {
   const status = codexStatus, login = status?.login;

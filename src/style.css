@@ -157,7 +157,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .reading-translation span { display:block; margin-bottom: 6px; color: #8177c6; font-size: 11px; font-weight: 700; }
 .reading-translation p { line-height: 1.7; white-space: pre-wrap; }
 .task-text-answer { width:100%; min-height:78px; margin-top:10px; padding:12px; resize:vertical; border:1px solid #e2e2d9; border-radius:12px; background:#fffefa; color:var(--ink); font-size:13px; line-height:1.6; }
-.update-link { display:inline-flex; text-decoration:none; margin-top:8px; }
+.update-link { display:inline-flex; align-items:center; text-decoration:none; }
 .update-result { color: #5f5b7e; font-weight: 600; }
 .week-table-wrap { margin-top: 16px; overflow-x: auto; }
 .week-table { width:100%; border-collapse: collapse; font-size:11px; color:#777970; }
