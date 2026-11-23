@@ -1,5 +1,5 @@
 import { createLocalJWKSet, jwtVerify } from 'jose';
-import { AppError, parseJSON } from './providers.js';
+import { AppError, gpt62Models, parseJSON } from './providers.js';
 
 const issuer = 'https://auth.openai.com';
 const resource = 'https://api.openai.com/v1';
@@ -124,7 +124,15 @@ export function createChatGPTAuth({ load, save, transport = fetch, now = Date.no
     const token = await accessToken();
     const model = config.model || (await models())[0]?.id;
     if (!model) throw new AppError('此 ChatGPT 账号没有可用模型，请检查订阅权限。',409);
-    const response = await http(`${resource}/responses`, { method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({model,instructions,input:[{role:'user',content:JSON.stringify(context)}],store:false,stream:true}) });
+    const input = [{ role: 'user', content: JSON.stringify(context) }];
+    const body = { model, input, store: false, stream: true };
+    // GPT-6.2 appends top-level instructions after input. Keep tutor instructions first.
+    if (gpt62Models.has(model)) input.unshift({ role: 'developer', content: instructions });
+    else body.instructions = instructions;
+    const response = await http(`${resource}/responses`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     if (!response.ok) throw new AppError(response.status===429 ? 'ChatGPT 额度不足，请到 ChatGPT 用量设置查看，或切换 API。' : 'ChatGPT 请求失败，请检查授权与账号权限。',502);
     return parseJSON(await consumeResponseStream(response));
   }

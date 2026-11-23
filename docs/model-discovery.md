@@ -18,6 +18,12 @@
 
 本机 Codex 和 ChatGPT 订阅账号继续使用各自的账号模型列表，不走 API Key 列表接口。
 
+## GPT-6.2
+
+在「模型连接」里刷新列表，选择 GPT-6.2 Sol（`gpt-6.2-sol`）或 GPT-6.2 Astra（`gpt-6.2-astra`），保存后可测试连接。OpenAI 官方 API 会把账号已列出的这两款模型放在列表顶部。ChatGPT 订阅和本机 Codex 按各自返回的模型列表显示，刷新后仍保留当前选择。
+
+OpenAI 官方 API 继续使用 Chat Completions，GPT-6.2 使用 `developer` 消息、低推理档和 JSON 输出。ChatGPT 订阅继续使用流式 Responses API，GPT-6.2 的教练指令放在输入列表开头。相关接口见 [OpenAI GPT-6.2 迁移说明](https://developers.openai.com/api/docs/guides/latest-model) 和 [ChatGPT 订阅模型与推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)。
+
 ## 验证
 
 `npm test` 共 72 项通过，其中新增 8 项覆盖列表协议、分页、响应清理、错误、密钥复用边界、只读获取、原生网络适配、HTTP 跨站拒绝和选择保留。可用 `node scripts/preview-models.js` 启动独立模拟上游和验收页面（5190 / 5191 端口），使用临时数据目录与假密钥，不读取正式学习记录，也不产生真实模型请求。浏览器完成自动获取、搜索、保存后刷新、手填保留、错误提示和切换服务商验收。未逐家使用真实 API Key 验证。

@@ -4,7 +4,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { createChatGPTAuth, consumeResponseStream } from '../server/chatgpt-auth.js';
 
 const pair=await generateKeyPair('RS256'),jwk={...await exportJWK(pair.publicKey),kid:'test',alg:'RS256',use:'sig'};
-function harness({ plain = false } = {}) {
+function harness({ plain = false, models = [{slug:'test-model',display_name:'Test',visibility:'list'},{slug:'hidden',visibility:'hide'}] } = {}) {
  let saved=null,authURL,invalidNonce=false,invalidAudience=false,denyScope=false,unsupportedRegion=false,refreshes=0,time=Date.now(),refreshFailure=false;
  const calls=[];
  const transport=async(url,options={})=>{
@@ -18,7 +18,7 @@ function harness({ plain = false } = {}) {
     .setProtectedHeader({alg:'RS256',kid:'test'}).setSubject('learner').setIssuer('https://auth.openai.com').setAudience(invalidAudience?'wrong':p.get('client_id')).setIssuedAt(Math.floor(time/1000)).setExpirationTime(Math.floor(time/1000)+3600).sign(pair.privateKey);
    return Response.json({access_token:refresh?'refreshed-token':'access-token',refresh_token:refresh?'rotated-refresh':'refresh-token',id_token:idToken,token_type:'Bearer',expires_in:3600,scope:denyScope?'openid email':'openid email offline_access chatgpt.tokens.use.direct'});
   }
-  if(url.endsWith('/models'))return Response.json({models:[{slug:'test-model',display_name:'Test',visibility:'list'},{slug:'hidden',visibility:'hide'}]});
+  if(url.endsWith('/models'))return Response.json({models});
   if(url.endsWith('/responses'))return new Response('data: {"type":"response.output_text.delta","delta":"{\\"ok\\":true}"}\n\ndata: {"type":"response.completed"}\n\n');
   if(url.endsWith('/oauth/revoke'))return new Response(null,{status:200});
   throw new Error('Unexpected URL');
@@ -50,6 +50,28 @@ test('unsupported region returns a clear fallback message',async()=>{
  const h=harness();await h.start();h.unsupportedRegion=true;
  await assert.rejects(h.auth.finish(h.callback()),/当前不支持.*地区.*API Key/);
  assert.equal(h.saved().accounts.length,0);
+});
+
+test('GPT-6.2 places developer instructions first for the selected or account-default subscription model', async () => {
+  const h = harness({ models: [
+    { slug: 'hidden', visibility: 'hide' },
+    { slug: 'gpt-6.2-sol', display_name: 'GPT-6.2 Sol', visibility: 'list' },
+    { slug: 'gpt-6.2-astra', display_name: 'GPT-6.2 Astra', visibility: 'list' },
+  ] });
+  await h.start();
+  await h.auth.finish(h.callback());
+  assert.deepEqual((await h.auth.models()).map(model => model.id), ['gpt-6.2-sol', 'gpt-6.2-astra']);
+  for (const [model, expected] of [['', 'gpt-6.2-sol'], ['gpt-6.2-astra', 'gpt-6.2-astra']]) {
+    assert.deepEqual(await h.auth.complete({ model }, 'Return JSON', { action: 'connection-test' }), { ok: true });
+    const { url, options } = h.calls.at(-1);
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.deepEqual(JSON.parse(options.body), {
+      model: expected, input: [
+        { role: 'developer', content: 'Return JSON' },
+        { role: 'user', content: '{"action":"connection-test"}' },
+      ], store: false, stream: true,
+    });
+  }
 });
 
 test('native-style auth responses also expose the unsupported region message',async()=>{

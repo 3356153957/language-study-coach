@@ -8,6 +8,15 @@ export const providers = {
   gemini: { label: 'Google Gemini', protocol: 'gemini', baseURL: 'https://generativelanguage.googleapis.com/v1beta' },
 };
 
+export const gpt62Models = new Map([
+  ['gpt-6.2-sol', 'GPT-6.2 Sol'],
+  ['gpt-6.2-astra', 'GPT-6.2 Astra'],
+]);
+
+export function isOfficialOpenAI(config) {
+  return config.provider === 'openai' && config.baseURL === providers.openai.baseURL;
+}
+
 export class AppError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
@@ -66,7 +75,12 @@ export async function callModel(config, system, context, fetcher = fetch) {
   } else {
     url = `${config.baseURL}/chat/completions`;
     headers.Authorization = `Bearer ${config.apiKey}`;
-    body = { model: config.model, messages: [{ role: 'system', content: system }, { role: 'user', content }] };
+    const useGpt62 = isOfficialOpenAI(config) && gpt62Models.has(config.model);
+    body = {
+      model: config.model,
+      messages: [{ role: useGpt62 ? 'developer' : 'system', content: system }, { role: 'user', content }],
+      ...(useGpt62 ? { reasoning_effort: 'low', response_format: { type: 'json_object' } } : {}),
+    };
   }
   let response;
   try {

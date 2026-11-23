@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { listModels } from '../server/model-catalog.js';
-import { providers, validateAPIConnection } from '../server/providers.js';
+import { callModel, providers, validateAPIConnection } from '../server/providers.js';
 import { createEngine } from '../server/engine.js';
 import { createAPI } from '../server/api.js';
 import { createNativeClient, nativeFetcher } from '../src/native-client.js';
@@ -30,6 +30,48 @@ test('all API providers list models with their own authentication and never retu
     assert.deepEqual(output,{models:[{id:'catalog-text',name:'Text'}],truncated:false});
     assert.equal(JSON.stringify(output).includes(cfg.apiKey),false);
   }
+});
+
+test('OpenAI highlights only the GPT-6.2 models returned for the current key', async () => {
+  const rows = { data: [{ id: 'older-model' }, { id: 'gpt-6.2-astra' }, { id: 'gpt-6.2-sol' }] };
+  const config = { ...source, provider: 'openai', baseURL: providers.openai.baseURL };
+  const result = await listModels(config, async () => Response.json(rows));
+  assert.deepEqual(result.models, [
+    { id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol' },
+    { id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra' },
+    { id: 'older-model', name: 'older-model' },
+  ]);
+  const limited = await listModels(config, async () => Response.json({ data: rows.data.slice(0, 2) }));
+  assert.deepEqual(limited.models.map(model => model.id), ['gpt-6.2-astra', 'older-model']);
+  const compatible = await listModels(source, async () => Response.json(rows));
+  assert.deepEqual(compatible.models.map(model => model.id), rows.data.map(row => row.id));
+});
+
+test('GPT-6.2 uses JSON mode and low reasoning only on the official OpenAI API', async () => {
+  const official = { ...source, provider: 'openai', baseURL: providers.openai.baseURL };
+  const context = { action: 'connection-test' };
+  const instructions = '只返回 JSON 对象。';
+  async function connect(config, adapted) {
+    const result = await callModel(config, instructions, context, async (url, request) => {
+      assert.equal(url, `${config.baseURL}/chat/completions`);
+      assert.equal(request.headers.Authorization, `Bearer ${source.apiKey}`);
+      assert.deepEqual(JSON.parse(request.body), {
+        model: config.model,
+        messages: [
+          { role: adapted ? 'developer' : 'system', content: instructions },
+          { role: 'user', content: JSON.stringify(context) },
+        ],
+        ...(adapted ? { reasoning_effort: 'low', response_format: { type: 'json_object' } } : {}),
+      });
+      return Response.json({ choices: [{ message: { content: '{"ok":true}' } }] });
+    });
+    assert.deepEqual(result, { ok: true });
+  }
+  await connect({ ...official, model: 'gpt-6.2-sol' }, true);
+  await connect({ ...official, model: 'gpt-6.2-astra' }, true);
+  await connect({ ...official, model: 'gpt-6.1-sol' }, false);
+  await connect({ ...official, baseURL: source.baseURL, model: 'gpt-6.2-sol' }, false);
+  await connect({ ...source, model: 'gpt-6.2-sol' }, false);
 });
 
 test('Anthropic and Gemini follow bounded cursor pages on the original destination, ignoring next URLs',async()=>{

@@ -1,4 +1,4 @@
-import { AppError, providers } from './providers.js';
+import { AppError, gpt62Models, isOfficialOpenAI, providers } from './providers.js';
 
 // Only construct pagination requests on the configured destination. Upstream
 // next-page URLs are never followed, and credentials stay in request headers.
@@ -53,6 +53,13 @@ export async function listModels(config, fetcher = fetch) {
     if (typeof next !== 'string' || next.length > 2048 || cursors.has(next)) throw new AppError('上游的模型分页响应异常，可以手动填写模型 ID。', 502);
     cursors.add(next); cursor = next;
     if (page === 9) truncated = true;
+  }
+  if (isOfficialOpenAI(config)) {
+    const featured = [];
+    for (const [id, name] of gpt62Models) {
+      if (models.delete(id)) featured.push({ id, name });
+    }
+    return { models: [...featured, ...models.values()], truncated };
   }
   return { models: [...models.values()], truncated };
 }
