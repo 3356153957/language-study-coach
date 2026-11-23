@@ -10,8 +10,11 @@ export async function resolveCodexExecutable(env = process.env) {
   const candidates = env.CODEX_CLI_PATH ? [env.CODEX_CLI_PATH] : [];
   const directories = (env.PATH || '').split(path.delimiter).filter(Boolean);
   if (process.platform === 'win32' && env.APPDATA) directories.push(path.join(env.APPDATA, 'npm'));
-  for (const dir of new Set(directories)) {
-    candidates.push(path.join(dir, process.platform === 'win32' ? 'codex.exe' : 'codex'));
+  const executableName = process.platform === 'win32' ? 'codex.exe' : 'codex';
+  const searchDirectories = [...new Set(directories)];
+  // Prefer a Codex executable on PATH before inferring a path inside npm packages.
+  candidates.push(...searchDirectories.map(dir => path.join(dir, executableName)));
+  for (const dir of searchDirectories) {
     if (process.platform === 'win32') {
       const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
       const npmScope = path.join(dir, 'node_modules', '@openai');

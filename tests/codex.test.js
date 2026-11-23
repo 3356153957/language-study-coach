@@ -64,6 +64,9 @@ test('Windows discovers current and legacy npm Codex binaries without a CLI over
     assert.equal(await resolveCodexExecutable({ PATH: npm }), executable, name);
     assert.equal(await resolveCodexExecutable({ APPDATA: appData }), executable, name);
     assert.equal(await resolveCodexExecutable({ PATH: npm, CODEX_CLI_PATH: override }), override, name);
+    const mixedPath = [npm, directory].join(path.delimiter);
+    assert.equal(await resolveCodexExecutable({ PATH: mixedPath }), override, name);
+    assert.equal(await resolveCodexExecutable({ PATH: mixedPath, CODEX_CLI_PATH: executable }), executable, name);
   }
 });
 
