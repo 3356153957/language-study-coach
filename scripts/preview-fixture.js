@@ -72,7 +72,10 @@ const upstream = createHTTPServer(async (req, res) => {
   try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); ctx = JSON.parse(body.messages.at(-1).content); system = body.messages[0].content; }
   catch { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: { message: 'fixture expects a chat completion request' } })); }
   if (ctx.action === 'connection-test') result = { ok: true };
-  else if (system === prompts.conversation) result = { reply: '【模拟联调】可以先聊聊。你最近比较感兴趣的是什么？' };
+  else if (system === prompts.conversation) result = ctx.message.includes('多做') ? {
+    reply: '【模拟联调】点击应用，之后的综合练习会参考这个偏好。',
+    practicePreference: '多练短选择和短表达，减少长篇阅读。',
+  } : { reply: '【模拟联调】可以先聊聊。你最近比较感兴趣的是什么？' };
   else if (system === prompts.grade || system === prompts.gradeAndNext) {
     const items = ctx.task.questions?.length ? ctx.task.questions : [{ options: ctx.task.options, answer: ctx.task.answer }];
     let values = [ctx.answer]; try { if (items.length > 1) values = JSON.parse(ctx.answer); } catch { values = []; }

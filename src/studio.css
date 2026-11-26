@@ -311,6 +311,10 @@ details[open].dash-panel { border-color:#b7c6af; }
 .coach-starters .secondary-button,.practice-subheader .secondary-button { padding:6px 10px; min-height:36px; font-size:12px; }
 .coach-conversation .chat-composer>p { margin-bottom:10px; }
 .coach-chat-note { color:var(--muted); font-size:12px; }
+.coach-preference .secondary-button { margin-top:10px; }
+.coach-saved-preference { margin-bottom:8px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; font-size:13px; }
+.coach-saved-preference summary { cursor:pointer; }
+.coach-saved-preference p { margin-top:6px; max-height:6em; overflow:auto; }
 .keyboard-open .coach-starters { display:none; }
 .busy-banner { background:#eef3e6; border:1px solid #dbe6cf; color:#506a3f; }.spinner { border-color:#d3dfc5; border-top-color:#5e7b4b; }.alert { border-radius:12px; }.alert.success { background:#edf5e7; color:#496b3c; border:1px solid #d6e6c9; }.alert.error { background:#fdf0e9; color:#925439; border:1px solid #ebcdbb; }.alert button { color:inherit; }
 .first-practice { background:#f8faf3; }.first-practice h2 { font-size:16px; }.first-practice>p { margin:9px 0 16px; }

@@ -35,7 +35,7 @@ test('free coach chat works before practice, resumes its context and saves witho
   assert.deepEqual(engine.coachChat().turns, []);
   const { turns } = await engine.execute(route, first);
   assert.equal(turns[0].goal, null);
-  assert.deepEqual(await engine.execute(route, first), { turns });
+  assert.deepEqual(await engine.execute(route, first), { turns, practicePreferences: {} });
   assert.equal(contexts.length, 1);
   assert.equal(engine.view().sessions.length, 0);
 
@@ -44,7 +44,7 @@ test('free coach chat works before practice, resumes its context and saves witho
   const followUp = { requestId: crypto.randomUUID(), goal: '高中英语', message: '那用公路自行车练一句吧。' };
   failSave = true;
   await assert.rejects(engine.execute(route, followUp), /disk full/);
-  assert.deepEqual(engine.coachChat(), { turns });
+  assert.deepEqual(engine.coachChat(), { turns, practicePreferences: {} });
   failSave = false;
   await engine.execute(route, followUp);
   assert.deepEqual(engine.view({ compact: true }), before);
@@ -55,6 +55,64 @@ test('free coach chat works before practice, resumes its context and saves witho
   const restored = createEngine({ initialState: saved });
   assert.equal(restored.coachChat().turns.at(-1).message, followUp.message);
   assert.equal(JSON.stringify(restored.backup()).includes(followUp.message), false);
+});
+
+test('applying a coach proposal refreshes the queued question and steers new comprehensive practice for that goal', async () => {
+  const goal = '四级', preference = '多练短选择和短表达，减少长篇阅读。';
+  const contexts = [];
+  let saved, number = 0;
+  const examTask = () => ({
+    ...task(++number), examPart: '仔细阅读', skill: '阅读', passage: 'I went home yesterday.',
+    options: ['went', 'go', 'going', 'gone'],
+  });
+  const engine = createEngine({
+    initialState: { version: 1, config, sessions: [] },
+    save: async value => { saved = structuredClone(value); },
+    modelCall: async (config, prompt, context) => {
+      contexts.push({ prompt, context });
+      if (prompt === prompts.conversation) return { reply: '点应用后，之后的题会参考这个偏好。', practicePreference: preference };
+      if (prompt === prompts.gradeAndNext) return { feedback: feedback(true), nextTask: examTask() };
+      assert.equal(prompt, prompts.next);
+      return examTask();
+    },
+  });
+  const start = mode => engine.execute('/api/session/start', { goal, mode });
+  const answer = session => engine.execute('/api/session/answer', { sessionId: session.id, taskId: session.current.id, answer: 'went' });
+  const session = (await start('综合')).sessions[0];
+  const graded = (await answer(session)).sessions[0];
+  const profileBeforePreference = engine.view().profile;
+  assert.equal(graded.nextReady, true);
+  const turnId = crypto.randomUUID();
+  const chat = await engine.execute('/api/coach/chat', { goal, message: '读长文太费劲，多做点表达和选择题吧。', requestId: turnId });
+  assert.equal(chat.turns[0].practicePreference, preference);
+  assert.deepEqual(chat.practicePreferences, {});
+  assert.equal(engine.detail(session.id).nextReady, true);
+
+  const applyRoute = '/api/coach/practice-preference';
+  await assert.rejects(engine.execute(applyRoute, { goal: '六级', turnId }), /找不到/);
+  const applied = await engine.execute(applyRoute, { goal, turnId });
+  assert.equal(applied.practicePreferences[goal], preference);
+  const updated = engine.detail(session.id);
+  assert.equal(updated.nextReady, false);
+  assert.deepEqual(updated.history, graded.history);
+  assert.deepEqual(updated.current, graded.current);
+  assert.deepEqual(applied.profile, profileBeforePreference);
+  const restarted = createEngine({ initialState: saved });
+  assert.equal(restarted.coachChat().practicePreferences[goal], preference);
+
+  const next = (await engine.execute('/api/session/next', { sessionId: session.id, taskId: session.current.id })).sessions[0];
+  assert.equal(contexts.at(-1).context.practicePreference, preference);
+  assert.equal(next.current.examPart, '仔细阅读');
+  await answer(next);
+  assert.equal(contexts.at(-1).context.practicePreference, preference);
+
+  await engine.execute('/api/session/start', { goal, mode: '阅读', replaceSessionId: session.id });
+  assert.equal(contexts.at(-1).context.practicePreference, undefined);
+  const current = engine.view().sessions.at(-1);
+  await engine.execute('/api/session/start', { goal: '六级', mode: '综合', replaceSessionId: current.id });
+  assert.equal(contexts.at(-1).context.practicePreference, undefined);
+  const cleared = await engine.execute(applyRoute, { goal, clear: true });
+  assert.deepEqual(cleared.practicePreferences, {});
 });
 
 test('personal plans survive grading, reports, backup and cloud restore and reach the tutor for the selected goal', async()=>{

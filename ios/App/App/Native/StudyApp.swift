@@ -127,8 +127,9 @@ struct CoachConversationScreen:View {
     @EnvironmentObject private var store:StudyStore
     @Environment(\.dismiss) private var dismiss
     @FocusState private var editing:Bool
-    @State private var turns:[J]=[]
+    @State private var conversation:J = .null
     @State private var loading=true
+    @State private var updatingPreference=false
     @State private var pending=""
     @State private var error=""
     @State private var attempt:(message:String,id:String)?
@@ -140,7 +141,11 @@ struct CoachConversationScreen:View {
         ("用喜欢的话题练一句","我想用自己感兴趣的话题练一句英语。")
     ]
     private var sending:Bool{!pending.isEmpty}
+    private var working:Bool{sending || updatingPreference}
     private var message:String{store.coachDraft.trimmingCharacters(in:.whitespacesAndNewlines)}
+    private var turns:[J]{conversation["turns"].list}
+    private var savedPreference:String{conversation["practicePreferences"][goal].text}
+    private var proposal:J?{turns.last{ $0["goal"].text==goal && !$0["practicePreference"].text.isEmpty }}
 
     var body:some View{
         NavigationStack{
@@ -148,13 +153,22 @@ struct CoachConversationScreen:View {
                 ScrollView{
                     LazyVStack(alignment:.leading,spacing:18){
                         if turns.isEmpty{
-                            bubble("今天想聊什么？可以说说题目哪里没意思，也可以聊聊你最近感兴趣的事。想练的话，一句就够。")
+                            bubble("今天想聊什么？可以说说题目哪里没意思，也可以告诉我以后想多练什么。")
                         }
                         ForEach(turns,id:\.recordID){turn in
                             bubble(turn["message"].text,user:true)
                             bubble(turn["reply"].text)
+                            if turn.recordID==proposal?.recordID && turn["practicePreference"].text != savedPreference{
+                                Panel{
+                                    Text(goal+"综合练习建议").font(.subheadline.bold())
+                                    Text(turn["practicePreference"].text)
+                                    Button("应用到综合练习"){updatePreference(turnID:turn.recordID)}
+                                        .buttonStyle(.bordered).disabled(loading || working)
+                                }
+                            }
                         }
                         if sending{bubble(pending,user:true);ProgressView("教练正在回复…")}
+                        if updatingPreference{ProgressView("正在更新出题偏好…")}
                         if loading{ProgressView("正在读取教练对话…")}
                         if !error.isEmpty{Text(error).font(.footnote).foregroundStyle(.red)}
                         Color.clear.frame(height:1).id("coach-bottom")
@@ -168,13 +182,13 @@ struct CoachConversationScreen:View {
             .background(StudyStyle.background)
             .navigationTitle("和教练聊")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar{ToolbarItem(placement:.cancellationAction){Button(fromPractice ? "返回练习":"完成"){dismiss()}.disabled(sending)}}
+            .toolbar{ToolbarItem(placement:.cancellationAction){Button(fromPractice ? "返回练习":"完成"){dismiss()}.disabled(working)}}
         }
         .tint(StudyStyle.purple)
-        .interactiveDismissDisabled(sending)
+        .interactiveDismissDisabled(working)
         .task{
             defer{loading=false}
-            do{turns=try await store.request("coach/chat")["turns"].list}
+            do{conversation=try await store.request("coach/chat")}
             catch{self.error=error.localizedDescription}
         }
     }
@@ -190,23 +204,29 @@ struct CoachConversationScreen:View {
 
     @ViewBuilder private var composer:some View{
         VStack(alignment:.leading,spacing:8){
+            if !savedPreference.isEmpty{
+                DisclosureGroup(goal+"出题偏好已应用"){
+                    Text(savedPreference).font(.footnote).frame(maxWidth:.infinity,alignment:.leading)
+                    Button("恢复默认出题"){updatePreference()}.disabled(working)
+                }.font(.subheadline)
+            }
             if store.configured{
-                if turns.isEmpty && !loading && !sending && !editing{
+                if turns.isEmpty && !loading && !working && !editing{
                     ScrollView(.horizontal){
                         HStack{ForEach(starters,id:\.0){label,value in
                             Button(label){store.coachDraft=value;editing=true}.buttonStyle(.bordered)
                         }}
                     }.scrollIndicators(.hidden)
                 }
-                TextField("想说什么，中文或英文都可以…",text:$store.coachDraft,axis:.vertical)
+                TextField("想说什么，中文或英文都可以…",text:Binding(get:{sending ? "":store.coachDraft},set:{store.coachDraft=$0}),axis:.vertical)
                     .lineLimit(2...4).padding(10)
                     .background(StudyStyle.background,in:RoundedRectangle(cornerRadius:10))
-                    .focused($editing).disabled(sending).accessibilityIdentifier("free-coach-message")
+                    .focused($editing).disabled(working).accessibilityIdentifier("free-coach-message")
                 HStack{
                     Text(message.utf16.count>2000 ? "消息最多 2000 字":"自由聊天 · 不计分").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("发送",action:send).buttonStyle(.borderedProminent)
-                        .disabled(loading || sending || message.isEmpty || message.utf16.count>2000)
+                        .disabled(loading || working || message.isEmpty || message.utf16.count>2000)
                 }
             }else{
                 Text("连接学习模型后，就可以直接和教练聊。").font(.subheadline)
@@ -217,15 +237,27 @@ struct CoachConversationScreen:View {
 
     private func send(){
         let text=message
-        guard !loading,!sending,!text.isEmpty,text.utf16.count<=2000 else{return}
+        guard !loading,!working,!text.isEmpty,text.utf16.count<=2000 else{return}
         let id=attempt.flatMap{$0.message==text ? $0.id:nil} ?? UUID().uuidString.lowercased()
         attempt=(text,id)
         pending=text;error="";editing=false
         Task{
             defer{pending=""}
             do{
-                turns=try await store.request("coach/chat",["message":.s(text),"goal":.s(goal),"requestId":.s(id)])["turns"].list
+                conversation=try await store.request("coach/chat",["message":.s(text),"goal":.s(goal),"requestId":.s(id)])
                 store.coachDraft="";attempt=nil
+            }catch{self.error=error.localizedDescription}
+        }
+    }
+    private func updatePreference(turnID:String?=nil){
+        guard !loading,!working else{return}
+        updatingPreference=true;error="";editing=false
+        Task{
+            defer{updatingPreference=false}
+            do{
+                let result=try await store.request("coach/practice-preference",["goal":.s(goal),"turnId":turnID.map{.s($0)} ?? .null,"clear":.bool(turnID==nil)])
+                conversation=result
+                store.state=result
             }catch{self.error=error.localizedDescription}
         }
     }

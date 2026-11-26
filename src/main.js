@@ -45,7 +45,7 @@ let activityData = null, practiceMode = '听力';
 let wordQuery = '', wordFilter = 'learning', examGoal = '四级', examRequestId = null;
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
-let coachTurns = [], freeCoachMessage = '', coachAttempt = null, coachFromPractice = false;
+let coachConversation = { turns: [], practicePreferences: {} }, freeCoachMessage = '', coachAttempt = null, coachFromPractice = false;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
 let syncStatus=null,syncPreview=null,syncRunning=false;
@@ -63,6 +63,7 @@ if(draft.taskId){const saved=draftStore.read(draft.taskId);if(saved?.savedAt>(dr
 let draftWarning='';
 let lastActivity = Date.now(), recognition = null, audioState = 'idle', voiceMessage = '', speed = 1;
 const current = () => data?.sessions.find(x => !x.finishedAt);
+const coachGoal = () => coachFromPractice ? current()?.goal || goal : goal;
 function draftStatusHTML(){
   const variants=draftStore.conflicts(draft.taskId);
   return `${esc(draftWarning)}${draftStore.lastResult.kind==='conflict' ? `<div>${button('采用已保存版本','draft-use-saved','secondary-button')}${button('保存当前版本','draft-keep-mine','secondary-button')}</div>`:''}${variants.length ? `<details><summary>查看其他版本草稿（${variants.length}）</summary>${variants.map((value,index)=>`<div><pre>${esc(value.answer)}</pre>${value.coachMessage ? `<p>${esc(value.coachMessage)}</p>`:''}${button('恢复这个版本','draft-restore-version','secondary-button',`data-index="${index}"`)}</div>`).join('')}</details>`:''}`;
@@ -294,7 +295,7 @@ function navigate(target) {
   if (target !== 'settings') { settingsDraft = null; codexStatus = null; authURL = ''; importBackup = null; importPreview = null; }
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (target === 'coach') {
-    return run('正在读取教练对话…', async () => { coachTurns = (await request('coach/chat')).turns; });
+    return run('正在读取教练对话…', async () => { coachConversation = await request('coach/chat'); });
   }
   if (target === 'activity' || target === 'week') {
     activityData = null;
@@ -361,7 +362,8 @@ function render() {
   if (coachLog) coachLog.scrollTop = coachLog.scrollHeight;
 }
 function page() {
-  if (screen === 'coach') return renderCoachConversation({ turns: coachTurns, message: freeCoachMessage,
+  if (screen === 'coach') return renderCoachConversation({ turns: coachConversation.turns, goal: coachGoal(),
+    savedPreference: coachConversation.practicePreferences[coachGoal()], message: freeCoachMessage,
     pending: busy === '教练正在回复…' ? coachAttempt?.message : '', busy, configured: data.configured,
     fromPractice: coachFromPractice && !!current(), esc, button });
   if (screen === 'wordbook') return renderWordbook({data,esc,button,query:wordQuery,filter:wordFilter});
@@ -512,6 +514,16 @@ app.addEventListener('click', async event => {
     field.dispatchEvent(new Event('input', { bubbles: true }));
     field.focus();
     return;
+  }
+  if (action === 'coach-apply-preference' || action === 'coach-clear-preference') {
+    const clear = action === 'coach-clear-preference';
+    return run(clear ? '正在恢复默认出题…' : '正在应用出题偏好…', async () => {
+      const { turns, practicePreferences, ...state } = await request('coach/practice-preference', { goal: coachGoal(), turnId: el.dataset.id, clear });
+      coachConversation = { turns, practicePreferences };
+      data = { ...data, ...state };
+      syncDraft();
+      notice = clear ? '已恢复默认出题。' : '出题偏好已应用，下次生成综合练习时生效。';
+    });
   }
   if (action === 'draft-use-saved' || action === 'draft-restore-version') {
     const value=action === 'draft-use-saved' ? draftStore.read(draft.taskId) : draftStore.conflicts(draft.taskId)[Number(el.dataset.index)];
@@ -782,11 +794,11 @@ app.addEventListener('submit', async event => {
   }
   if (event.target.id === 'coach-chat-form') {
     event.preventDefault();
-    const message = freeCoachMessage.trim(), chatGoal = coachFromPractice ? current()?.goal || goal : goal;
+    const message = freeCoachMessage.trim(), chatGoal = coachGoal();
     if (!message || busy) return;
     if (coachAttempt?.message !== message || coachAttempt.goal !== chatGoal) coachAttempt = { message, goal: chatGoal, requestId: crypto.randomUUID() };
     await run('教练正在回复…', async () => {
-      coachTurns = (await request('coach/chat', coachAttempt)).turns;
+      coachConversation = await request('coach/chat', coachAttempt);
       freeCoachMessage = '';
       coachAttempt = null;
     });

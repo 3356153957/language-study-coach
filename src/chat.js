@@ -49,21 +49,29 @@ const starters = [
   ['用喜欢的话题练一句', '我想用自己感兴趣的话题练一句英语。'],
 ];
 
-export function renderCoachConversation({ turns, message, pending, busy, configured, fromPractice, esc, button }) {
+export function renderCoachConversation({ turns, goal, savedPreference, message, pending, busy, configured, fromPractice, esc, button }) {
   const user = value => chatRow('user', '你', chatText(value, esc), esc);
-  const coach = value => chatRow('coach', '英语教练', chatText(value, esc), esc);
+  const coach = (value, extra = '') => chatRow('coach', '英语教练', chatText(value, esc) + extra, esc);
+  const proposal = turns.findLast(turn => turn.goal === goal && turn.practicePreference);
+  const preferenceCard = proposal && proposal.practicePreference !== savedPreference ? `<div class="chat-revision coach-preference">
+    <strong>${esc(goal)}综合练习建议</strong>${chatText(proposal.practicePreference, esc)}
+    ${button('应用到综合练习', 'coach-apply-preference', 'secondary-button', `data-id="${esc(proposal.id)}"`)}
+  </div>` : '';
   return `<section class="chat-session coach-conversation"><header class="chat-session-header">
     <div>${button(fromPractice ? '← 返回练习' : '← 学习', fromPractice ? 'session' : 'home', 'back-button')}<h1>和教练聊</h1></div>
   </header>
   <div class="chat-log" id="coach-log" role="log" aria-label="教练对话">
-    ${turns?.length ? turns.map(turn => user(turn.message) + coach(turn.reply)).join('') : coach('今天想聊什么？可以说说题目哪里没意思，也可以聊聊你最近感兴趣的事。想练的话，一句就够。')}
+    ${turns.length ? turns.map(turn => user(turn.message) + coach(turn.reply, turn === proposal ? preferenceCard : '')).join('') : coach('今天想聊什么？可以说说题目哪里没意思，也可以告诉我以后想多练什么。')}
     ${pending ? user(pending) : ''}
     ${busy ? `<p class="chat-thinking" role="status"><span class="spinner"></span>${esc(busy)}</p>` : ''}
   </div>
-  <div class="chat-bottom">${configured ? `<form id="coach-chat-form" class="chat-composer">
-    <div class="coach-starters" aria-label="聊天开场">${!turns?.length && !pending ? starters.map(([label, value]) => button(label, 'coach-starter', 'secondary-button', `data-value="${esc(value)}"`)).join('') : ''}</div>
+  <div class="chat-bottom">${savedPreference ? `<details class="coach-saved-preference">
+    <summary>${esc(goal)}出题偏好已应用</summary>${chatText(savedPreference, esc)}
+    ${button('恢复默认出题', 'coach-clear-preference', 'text-button')}
+  </details>` : ''}${configured ? `<form id="coach-chat-form" class="chat-composer">
+    <div class="coach-starters" aria-label="聊天开场">${!turns.length && !pending ? starters.map(([label, value]) => button(label, 'coach-starter', 'secondary-button', `data-value="${esc(value)}"`)).join('') : ''}</div>
     <label class="sr-only" for="free-coach-message">给教练的消息</label>
-    <textarea id="free-coach-message" maxlength="2000" placeholder="想说什么，中文或英文都可以…" ${busy ? 'disabled' : ''}>${esc(message)}</textarea>
+    <textarea id="free-coach-message" maxlength="2000" placeholder="想说什么，中文或英文都可以…" ${busy ? 'disabled' : ''}>${pending ? '' : esc(message)}</textarea>
     <div class="composer-tools"><span class="coach-chat-note">自由聊天 · 不计分</span><button type="submit" class="primary-button" ${busy || !message.trim() ? 'disabled' : ''}>发送 ↑</button></div>
   </form>` : `<div class="chat-composer"><p>连接学习模型后，就可以直接和教练聊。</p>${button('去设置连接 AI', 'settings', 'secondary-button')}</div>`}</div>
   </section>`;

@@ -17,7 +17,8 @@ import { assessmentPrompt, mergeAssessments } from './exam-assessment.js';
 const randomUUID = () => globalThis.crypto.randomUUID();
 export function createEngine({ initialState = { version: 1, config: null, profiles: {}, sessions: [] }, save, modelCall = callModel, modelFetcher = fetch, codex, availableProviders = providers, allowImport = true }) {
   let state = initialState, busy = false;
-  const coachChat = (s = state) => ({ turns: s.coachTurns || [] });
+  const coachChat = (s = state) => ({ turns: s.coachTurns || [], practicePreferences: s.practicePreferences || {} });
+  const usesPracticePreference = session => session.mode === '综合' && !session.placement && !session.review && !session.reviewId && !session.focus;
   const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary, nextFocus: profile.nextFocus, learningPlans: profile.learningPlans, updatedAt: profile.updatedAt, live: profile.live };
   const active = s => s.sessions.find(x => !x.finishedAt);
   function recommendations(s) {
@@ -157,7 +158,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
     }
   }
   async function next(s, session) {
-    const result = await modelCall(s.config, prompts.next, context(s, session));
+    const result = await modelCall(s.config, prompts.next, generationContext(s, session));
     session.current = validateTask(result, session);
     session.currentAskedAt = new Date().toISOString();
     session.feedback = null;
@@ -165,6 +166,10 @@ export function createEngine({ initialState = { version: 1, config: null, profil
     session.nextPreparationError = '';
     session.currentHelpUsed = false;
     session.source = { provider: s.config.provider, model: s.config.model || 'Codex 默认模型' };
+  }
+  function generationContext(s, session) {
+    const practicePreference = usesPracticePreference(session) && s.practicePreferences?.[session.goal];
+    return { ...context(s, session), ...(practicePreference ? { practicePreference } : {}) };
   }
   async function mutate(route, input, s) {
     if (route === '/api/vocabulary/mark') {
@@ -259,11 +264,31 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       if (!s.config) throw new AppError('请先在设置中连接学习模型。', 409);
       const round = active(s), task = round?.current;
       const currentPractice = task && round.goal === goal ? { mode: round.mode, skill: task.skill, level: task.level, examPart: task.examPart } : null;
-      const reply = validateReply(await modelCall(s.config, prompts.conversation, {
+      const result = await modelCall(s.config, prompts.conversation, {
         goal, profile: dashboardProfile(sharedProfile(s)), currentPractice,
+        savedPracticePreference: s.practicePreferences?.[goal] || null,
         conversation: turns.slice(-8).map(({ goal, message, reply }) => ({ goal, message, reply })), message,
-      }));
-      s.coachTurns = [...turns, { id: input.requestId, goal, message, reply, at: new Date().toISOString() }].slice(-30);
+      });
+      const reply = validateReply(result);
+      const preference = typeof result.practicePreference === 'string' ? result.practicePreference.trim().replace(/\s+/g, ' ') : '';
+      s.coachTurns = [...turns, { id: input.requestId, goal, message, reply, at: new Date().toISOString(),
+        ...(goal && preference && preference.length <= 240 ? { practicePreference: preference } : {}) }].slice(-30);
+    } else if (route === '/api/coach/practice-preference') {
+      const { goal, turnId, clear } = input;
+      if (!goals.includes(goal)) throw new AppError('请先选择有效的学习目标。');
+      const proposal = s.coachTurns?.find(turn => turn.goal === goal && turn.id === turnId)?.practicePreference;
+      if (clear !== true && !proposal) throw new AppError('找不到这条出题偏好，请重新打开教练对话。', 409);
+      const before = s.practicePreferences?.[goal];
+      const preference = clear === true ? undefined : proposal;
+      if (preference === before) return;
+      s.practicePreferences = { ...s.practicePreferences };
+      if (preference) s.practicePreferences[goal] = preference;
+      else delete s.practicePreferences[goal];
+      const session = active(s);
+      if (session?.goal === goal && usesPracticePreference(session) && session.feedback && session.history.length < session.targetCount) {
+        session.prepared = null;
+        session.nextPreparationError = '继续时会按新的出题设置重新生成。';
+      }
     } else if (route === '/api/settings/test') {
       const result = await modelCall(s.config, '只返回 JSON 对象 {"ok":true}。', { action: 'connection-test' });
       if (result.ok !== true) throw new AppError('接口可连接，但模型没有遵循 JSON 输出要求。', 502);
@@ -369,7 +394,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         validateLearnerAnswer(session.current, answer, {skippedQuestions});
         const telemetry = { activeSeconds: Math.max(0, Math.min(1800, Math.round(Number(input.activeSeconds) || 0))), hintUsed: !!input.hintUsed || !!session.currentHelpUsed, replays: Math.max(0, Math.min(100, Math.round(Number(input.replays) || 0))), transcriptViewed: !!input.transcriptViewed, ...(skippedQuestions.length ? {skippedQuestions} : {}) };
         const prepareNext = session.history.length + 1 < session.targetCount;
-        const result = await modelCall(s.config, prepareNext ? prompts.gradeAndNext : prompts.grade, gradingContext({ ...context(s, session), discussion: session.discussions?.[session.current.id] || [] }, session.current, answer, telemetry));
+        const result = await modelCall(s.config, prepareNext ? prompts.gradeAndNext : prompts.grade, gradingContext({ ...(prepareNext ? generationContext(s, session) : context(s, session)), discussion: session.discussions?.[session.current.id] || [] }, session.current, answer, telemetry));
         const feedback = validateFeedback(prepareNext ? result.feedback : result, session.current, answer, {skippedQuestions});
         session.feedback = feedback;
         session.history.push({ id: randomUUID(), task: session.current, answer, feedback, ...telemetry, ...(!session.history.length && (session.reviewId || session.review?.id) ? { reviewOf: session.reviewId || session.review.id, ...(session.reviewQuestionIndex !== undefined ? {reviewQuestionIndex:session.reviewQuestionIndex} : {}) } : {}), askedAt: session.currentAskedAt || session.startedAt, at: new Date().toISOString(), source: { provider: s.config.provider, model: s.config.model || 'Codex 默认模型' } });
@@ -446,6 +471,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         await save(draft);
         state = draft;
         if (route === '/api/coach/chat') return coachChat();
+        if (route === '/api/coach/practice-preference') return { ...view(options), ...coachChat() };
         return { ...view(options), ...(importSummary ? { importSummary } : {}) };
       } finally { busy = false; }
     },

@@ -1,7 +1,7 @@
 {
   "name": "language-study-coach",
   "private": true,
-  "version": "1.0.12",
+  "version": "1.0.13",
   "type": "module",
   "main": "desktop/main.mjs",
   "engines": {
