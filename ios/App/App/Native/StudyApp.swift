@@ -51,11 +51,25 @@ struct HomeScreen:View {
     @EnvironmentObject var store:StudyStore
     @State private var detail:J = .null
     @State private var showDetail=false
+    @State private var showCoach=false
     var days:[J]{store.state["totals"]["all"]["days"].list}
     var body:some View{
         NavigationStack{
             ScrollView{VStack(alignment:.leading,spacing:20){
                 Text(Date.now.formatted(.dateTime.month().day().weekday())).font(.subheadline).foregroundStyle(.secondary)
+                Button{showCoach=true}label:{
+                    Panel{
+                        HStack(spacing:14){
+                            Image(systemName:"bubble.left.and.text.bubble.right").foregroundStyle(StudyStyle.purple)
+                            VStack(alignment:.leading,spacing:4){
+                                Text("和教练聊").font(.headline)
+                                Text("说说为什么不想做题，或者用喜欢的话题练一句。").font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName:"chevron.right").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }.buttonStyle(.plain).accessibilityIdentifier("open-coach")
                 hero
                 if !store.configured{FirstPracticePanel()}
                 statistics
@@ -67,6 +81,7 @@ struct HomeScreen:View {
                 recent
             }.padding(20)}
             .background(StudyStyle.background).navigationTitle("学习概览").toolbar{GoalMenu()}
+            .sheet(isPresented:$showCoach){CoachConversationScreen(goal:store.goal)}
             .sheet(isPresented:$showDetail){RoundDetail(round:detail)}.refreshable{await store.refresh()}
         }
     }
@@ -107,6 +122,113 @@ struct HomeScreen:View {
         }
     }
     var recentItems:[J]{Array(store.state["recent"].list.filter{$0["goal"].text==store.goal}.prefix(5))}
+}
+struct CoachConversationScreen:View {
+    @EnvironmentObject private var store:StudyStore
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var editing:Bool
+    @State private var turns:[J]=[]
+    @State private var loading=true
+    @State private var pending=""
+    @State private var error=""
+    @State private var attempt:(message:String,id:String)?
+    let goal:String
+    var fromPractice=false
+    private let starters=[
+        ("今天只想聊聊","今天没什么动力，只想和你聊聊。"),
+        ("这些题我不想做","最近出的题我不太想做，想聊聊怎么换个方式学。"),
+        ("用喜欢的话题练一句","我想用自己感兴趣的话题练一句英语。")
+    ]
+    private var sending:Bool{!pending.isEmpty}
+    private var message:String{store.coachDraft.trimmingCharacters(in:.whitespacesAndNewlines)}
+
+    var body:some View{
+        NavigationStack{
+            ScrollViewReader{proxy in
+                ScrollView{
+                    LazyVStack(alignment:.leading,spacing:18){
+                        if turns.isEmpty{
+                            bubble("今天想聊什么？可以说说题目哪里没意思，也可以聊聊你最近感兴趣的事。想练的话，一句就够。")
+                        }
+                        ForEach(turns,id:\.recordID){turn in
+                            bubble(turn["message"].text,user:true)
+                            bubble(turn["reply"].text)
+                        }
+                        if sending{bubble(pending,user:true);ProgressView("教练正在回复…")}
+                        if loading{ProgressView("正在读取教练对话…")}
+                        if !error.isEmpty{Text(error).font(.footnote).foregroundStyle(.red)}
+                        Color.clear.frame(height:1).id("coach-bottom")
+                    }.padding(18)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge:.bottom,spacing:0){composer}
+                .onChange(of:turns.last?.recordID){_ in proxy.scrollTo("coach-bottom",anchor:.bottom)}
+                .onChange(of:pending){_ in proxy.scrollTo("coach-bottom",anchor:.bottom)}
+            }
+            .background(StudyStyle.background)
+            .navigationTitle("和教练聊")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar{ToolbarItem(placement:.cancellationAction){Button(fromPractice ? "返回练习":"完成"){dismiss()}.disabled(sending)}}
+        }
+        .tint(StudyStyle.purple)
+        .interactiveDismissDisabled(sending)
+        .task{
+            defer{loading=false}
+            do{turns=try await store.request("coach/chat")["turns"].list}
+            catch{self.error=error.localizedDescription}
+        }
+    }
+
+    private func bubble(_ message:String,user:Bool=false)->some View{
+        VStack(alignment:user ? .trailing:.leading,spacing:5){
+            Text(user ? "你":"英语教练").font(.caption).foregroundStyle(.secondary)
+            Text(message).padding(13)
+                .background(user ? StudyStyle.purple.opacity(0.12):Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:14))
+                .textSelection(.enabled)
+        }.frame(maxWidth:.infinity,alignment:user ? .trailing:.leading)
+    }
+
+    @ViewBuilder private var composer:some View{
+        VStack(alignment:.leading,spacing:8){
+            if store.configured{
+                if turns.isEmpty && !loading && !sending && !editing{
+                    ScrollView(.horizontal){
+                        HStack{ForEach(starters,id:\.0){label,value in
+                            Button(label){store.coachDraft=value;editing=true}.buttonStyle(.bordered)
+                        }}
+                    }.scrollIndicators(.hidden)
+                }
+                TextField("想说什么，中文或英文都可以…",text:$store.coachDraft,axis:.vertical)
+                    .lineLimit(2...4).padding(10)
+                    .background(StudyStyle.background,in:RoundedRectangle(cornerRadius:10))
+                    .focused($editing).disabled(sending).accessibilityIdentifier("free-coach-message")
+                HStack{
+                    Text(message.utf16.count>2000 ? "消息最多 2000 字":"自由聊天 · 不计分").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("发送",action:send).buttonStyle(.borderedProminent)
+                        .disabled(loading || sending || message.isEmpty || message.utf16.count>2000)
+                }
+            }else{
+                Text("连接学习模型后，就可以直接和教练聊。").font(.subheadline)
+                if !fromPractice{Button("去设置连接 AI"){store.tab=3;dismiss()}}
+            }
+        }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(.regularMaterial)
+    }
+
+    private func send(){
+        let text=message
+        guard !loading,!sending,!text.isEmpty,text.utf16.count<=2000 else{return}
+        let id=attempt.flatMap{$0.message==text ? $0.id:nil} ?? UUID().uuidString.lowercased()
+        attempt=(text,id)
+        pending=text;error="";editing=false
+        Task{
+            defer{pending=""}
+            do{
+                turns=try await store.request("coach/chat",["message":.s(text),"goal":.s(goal),"requestId":.s(id)])["turns"].list
+                store.coachDraft="";attempt=nil
+            }catch{self.error=error.localizedDescription}
+        }
+    }
 }
 struct StatTile:View {
     let title:String,value:String

@@ -17,6 +17,7 @@ import { assessmentPrompt, mergeAssessments } from './exam-assessment.js';
 const randomUUID = () => globalThis.crypto.randomUUID();
 export function createEngine({ initialState = { version: 1, config: null, profiles: {}, sessions: [] }, save, modelCall = callModel, modelFetcher = fetch, codex, availableProviders = providers, allowImport = true }) {
   let state = initialState, busy = false;
+  const coachChat = (s = state) => ({ turns: s.coachTurns || [] });
   const dashboardProfile = profile => profile && { level: profile.level, skills: profile.skills, summary: profile.summary, nextFocus: profile.nextFocus, learningPlans: profile.learningPlans, updatedAt: profile.updatedAt, live: profile.live };
   const active = s => s.sessions.find(x => !x.finishedAt);
   function recommendations(s) {
@@ -244,6 +245,25 @@ export function createEngine({ initialState = { version: 1, config: null, profil
       if (!availableProviders[input.provider]) throw new AppError('此设备不支持该服务商。');
       s.config = validateConfig(input, s.config || {});
       if (s.config.provider === 'codex' && !(await codex.status()).loggedIn) throw new AppError('请先完成 Codex 授权，再启用。', 409);
+    } else if (route === '/api/coach/chat') {
+      const message = typeof input.message === 'string' ? input.message.trim() : '';
+      if (!message || message.length > 2000) throw new AppError('请输入想和教练聊的内容，最多 2000 字。');
+      if (typeof input.requestId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(input.requestId)) throw new AppError('消息标识无效，请重试。');
+      const goal = goals.includes(input.goal) ? input.goal : null;
+      const { turns } = coachChat(s);
+      const previous = turns.find(turn => turn.id === input.requestId);
+      if (previous) {
+        if (previous.message !== message || previous.goal !== goal) throw new AppError('这条消息已变更，请重新发送。', 409);
+        return;
+      }
+      if (!s.config) throw new AppError('请先在设置中连接学习模型。', 409);
+      const round = active(s), task = round?.current;
+      const currentPractice = task && round.goal === goal ? { mode: round.mode, skill: task.skill, level: task.level, examPart: task.examPart } : null;
+      const reply = validateReply(await modelCall(s.config, prompts.conversation, {
+        goal, profile: dashboardProfile(sharedProfile(s)), currentPractice,
+        conversation: turns.slice(-8).map(({ goal, message, reply }) => ({ goal, message, reply })), message,
+      }));
+      s.coachTurns = [...turns, { id: input.requestId, goal, message, reply, at: new Date().toISOString() }].slice(-30);
     } else if (route === '/api/settings/test') {
       const result = await modelCall(s.config, '只返回 JSON 对象 {"ok":true}。', { action: 'connection-test' });
       if (result.ok !== true) throw new AppError('接口可连接，但模型没有遵循 JSON 输出要求。', 502);
@@ -390,7 +410,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
     }
   }
   return {
-    view, detail, review, profile, activity: offset => activityData(state, offset),
+    view, detail, review, profile, coachChat, activity: offset => activityData(state, offset),
     async models(input) {
       if (!Object.hasOwn(availableProviders, input.provider)) throw new AppError('此设备不支持该服务商。');
       const config = validateAPIConnection(input, state.config || {});
@@ -425,6 +445,7 @@ export function createEngine({ initialState = { version: 1, config: null, profil
         const importSummary=await mutate(route, input, draft);
         await save(draft);
         state = draft;
+        if (route === '/api/coach/chat') return coachChat();
         return { ...view(options), ...(importSummary ? { importSummary } : {}) };
       } finally { busy = false; }
     },

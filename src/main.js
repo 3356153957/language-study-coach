@@ -24,7 +24,7 @@ let captchaSiteKey = import.meta.env?.VITE_TURNSTILE_SITE_KEY || '';
 let nativeClient;
 
 import { icon, skillIcon, modeName } from './icons.js';
-import { renderLearningChat, discussionTarget, isDiscussing } from './chat.js';
+import { renderLearningChat, renderCoachConversation, discussionTarget, isDiscussing } from './chat.js';
 import { createListeningPlayer } from './listening-player.js';
 
 const app = document.querySelector('#app');
@@ -45,6 +45,7 @@ let activityData = null, practiceMode = '听力';
 let wordQuery = '', wordFilter = 'learning', examGoal = '四级', examRequestId = null;
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let pendingChat = null, chatScrollToEnd = true, starting = null;
+let coachTurns = [], freeCoachMessage = '', coachAttempt = null, coachFromPractice = false;
 let authStatus = null, authModels = [], authURL = '', authLoading = false, authPoll = null;
 let importBackup = null, importPreview = null;
 let syncStatus=null,syncPreview=null,syncRunning=false;
@@ -292,6 +293,9 @@ function navigate(target) {
   resetModelCatalog();
   if (target !== 'settings') { settingsDraft = null; codexStatus = null; authURL = ''; importBackup = null; importPreview = null; }
   window.scrollTo({ top: 0, behavior: 'instant' });
+  if (target === 'coach') {
+    return run('正在读取教练对话…', async () => { coachTurns = (await request('coach/chat')).turns; });
+  }
   if (target === 'activity' || target === 'week') {
     activityData = null;
     return run('正在读取学习记录…', async () => { activityData = await request('activity?offset=0'); });
@@ -322,24 +326,25 @@ async function fillWordMeanings(word) {
 }
 function selectGoal(value) { goal = value; localStorage.setItem('lsc-goal-v1', goal); navigate('home'); }
 function render() {
-  document.documentElement.classList.toggle('is-practicing', screen === 'session');
-  const navScreen = ['activity','week','summary','practice','exam','session','starting'].includes(screen) ? 'home' : screen;
+  const chatScreen = screen === 'session' || screen === 'coach';
+  document.documentElement.classList.toggle('is-practicing', chatScreen);
+  const navScreen = ['activity','week','summary','practice','exam','session','starting','coach'].includes(screen) ? 'home' : screen;
   const previousLog = app.querySelector('#chat-log');
   const previousScroll = previousLog?.scrollTop || 0;
   const nearEnd = !previousLog || previousLog.scrollHeight - previousScroll - previousLog.clientHeight < 100;
   const routeLabel = {home:'学习概览',welcome:'选择学习目标',profile:'能力进展',review:'错题回顾',wordbook:'单词本',settings:'设置',activity:'学习记录',week:'近 7 天',summary:'练习回顾',practice:`${practiceMode}练习`,exam:`${examGoal}通过率`}[screen];
-  app.innerHTML = `<div class="shell ${screen === 'session' ? 'session-shell' : ''}"><header class="topbar">
+  app.innerHTML = `<div class="shell ${chatScreen ? 'session-shell' : ''}"><header class="topbar">
     <button class="studio-brand" data-action="home" aria-label="Language Study Coach 首页"><span class="studio-mark">${icon('read')}</span><span>Language<span>STUDY COACH</span></span></button>
     <span class="nav-caption">你的学习空间</span>
     <nav class="topnav" aria-label="主导航">${[['home','学习'],['profile','进展'],['review','错题'],['wordbook','单词本'],['settings','设置']].map(([key, label]) => button(icon({home:'mixed',profile:'target',review:'history',wordbook:'words',settings:'settings'}[key]) + `<span>${label}</span><span class="nav-indicator" aria-hidden="true"></span>`, key, `nav-link ${navScreen === key ? 'active' : ''}`, navScreen === key ? 'aria-current="page"' : '')).join('')}</nav>
 
     <div class="sidebar-status"><i class="${data?.configured ? 'connected' : ''}"></i>${data?.configured ? '学习模型已配置' : '等待连接学习模型'}</div>
-    </header><main class="main-content ${screen === 'session' ? 'chat-main' : ''}">
+    </header><main class="main-content ${chatScreen ? 'chat-main' : ''}">
       ${routeLabel && !['home','welcome'].includes(screen) ? `<div class="workspace-line"><nav class="breadcrumbs" aria-label="页面路径">${button('学习空间','home','breadcrumb-link')}<span aria-hidden="true">/</span><span aria-current="page">${esc(routeLabel)}</span></nav></div>` : ''}
       ${error ? `<div class="alert error" role="alert">${esc(error)} ${button('关闭', 'dismiss', 'text-button')}</div>` : ''}
       ${notice ? `<div class="alert success" role="status">${esc(notice)}</div>` : ''}
       ${screen==='session' && !current()?.feedback ? `<div id="draft-save-status" class="alert error" role="alert" style="${draftWarning || draftStore.conflicts(draft.taskId).length ? '' : 'display:none'}">${draftStatusHTML()}</div>` : ''}
-      ${busy && screen !== 'session' && screen !== 'starting' ? `<div class="busy-banner" role="status"><span class="spinner"></span>${esc(busy)}</div>` : ''}
+      ${busy && !chatScreen && screen !== 'starting' ? `<div class="busy-banner" role="status"><span class="spinner"></span>${esc(busy)}</div>` : ''}
       ${!data ? `<div class="empty-state"><h2>正在读取学习记录</h2><p>${native ? '学习记录保存在这台手机。' : '学习记录保存在这台电脑。'}</p>${button('重新连接', 'reload')}</div>` : page()}
     </main>${planWelcome?`<dialog class="plan-welcome" aria-modal="true" aria-label="你正在使用 ChatGPT 订阅"><h2>你正在使用 ChatGPT 订阅</h2><p>本应用中符合条件的出题、批改和追问会使用你的订阅额度。你可以在 ChatGPT 用量设置中管理限额或断开授权。</p>${button('知道了','plan-notice-close')}</dialog>`:''}</div>`;
   if(planWelcome) app.querySelector('.plan-welcome')?.showModal();
@@ -352,8 +357,13 @@ function render() {
     log.scrollTop = firstPrompt && !previousLog ? 0 : (chatScrollToEnd || nearEnd ? log.scrollHeight : previousScroll);
     chatScrollToEnd = false;
   }
+  const coachLog = app.querySelector('#coach-log');
+  if (coachLog) coachLog.scrollTop = coachLog.scrollHeight;
 }
 function page() {
+  if (screen === 'coach') return renderCoachConversation({ turns: coachTurns, message: freeCoachMessage,
+    pending: busy === '教练正在回复…' ? coachAttempt?.message : '', busy, configured: data.configured,
+    fromPractice: coachFromPractice && !!current(), esc, button });
   if (screen === 'wordbook') return renderWordbook({data,esc,button,query:wordQuery,filter:wordFilter});
   if (screen === 'exam') return renderExamAssessment({data,goal:examGoal,esc,button});
   if (screen === 'settings') return settings();
@@ -369,7 +379,7 @@ function page() {
 }
 function welcome() {
   const learned = data.totals?.all?.count || 0;
-  return `<section class="welcome-page"><div class="welcome-copy"><span class="eyebrow">${learned ? `已完成 ${learned} 道练习` : 'YOUR ENGLISH COACH'}</span><h1>${learned ? '继续你的<br><em>英语练习。</em>' : '今天，<br><em>练一点英语。</em>'}</h1><p>${learned && data.profile?.summary ? esc(data.profile.summary.length > 200 ? data.profile.summary.slice(0,200) + '…' : data.profile.summary) : '选择学习目标，从一轮练习开始。'}</p><div class="welcome-note">${learned ? '选择接下来想练的目标。' : '阅读、听力、表达，按你的节奏来。'}</div></div>
+  return `<section class="welcome-page"><div class="welcome-copy"><span class="eyebrow">${learned ? `已完成 ${learned} 道练习` : 'YOUR ENGLISH COACH'}</span><h1>${learned ? '继续你的<br><em>英语练习。</em>' : '今天，<br><em>练一点英语。</em>'}</h1><p>${learned && data.profile?.summary ? esc(data.profile.summary.length > 200 ? data.profile.summary.slice(0,200) + '…' : data.profile.summary) : '选个学习目标，或者先和教练聊聊。'}</p>${button('和教练聊', 'open-coach', 'secondary-button')}</div>
     <div class="preset-panel"><div class="panel-heading">你想从哪里开始？<span class="muted">随时可以更换</span></div><div class="preset-grid">${presets.map(([name, value, tag, detail, color, icon]) => `<button class="preset-card ${color}" data-action="goal" data-value="${value}" ${busy ? 'disabled' : ''}><span class="card-arrow">↗</span><span class="preset-icon">${icon}</span><span class="preset-text"><span class="preset-eyebrow">${tag}</span><strong>${name}</strong><span>${detail}</span></span></button>`).join('')}</div><div class="panel-footer">四个学习目标 · 一个会逐步了解你的教练</div></div></section>`;
 }
 function home() { return renderDashboard({ data, goal, esc, button, date, demoAnswer }); }
@@ -491,6 +501,18 @@ app.addEventListener('click', async event => {
   if (!el || busy || el.disabled) return;
   const action = el.dataset.action;
   if (action === 'settings-section') { showSettingsSection(el.dataset.section); return; }
+  if (action === 'open-coach') {
+    coachFromPractice = screen === 'session';
+    if (coachFromPractice) persistDraft();
+    return navigate('coach');
+  }
+  if (action === 'coach-starter') {
+    const field = app.querySelector('#free-coach-message');
+    field.value = el.dataset.value;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.focus();
+    return;
+  }
   if (action === 'draft-use-saved' || action === 'draft-restore-version') {
     const value=action === 'draft-use-saved' ? draftStore.read(draft.taskId) : draftStore.conflicts(draft.taskId)[Number(el.dataset.index)];
     if(value){draft={...value};persistDraft(true);render();}return;
@@ -696,6 +718,11 @@ app.addEventListener('click', async event => {
   });
 });
 app.addEventListener('input', event => {
+  if (event.target.id === 'free-coach-message') {
+    freeCoachMessage = event.target.value;
+    app.querySelector('#coach-chat-form button[type="submit"]').disabled = !freeCoachMessage.trim();
+    return;
+  }
   if(event.target.id==='wordbook-search'){wordQuery=event.target.value;const fragment=document.createElement('div');fragment.innerHTML=renderWordbook({data,esc,button,query:wordQuery,filter:wordFilter});app.querySelector('.wordbook-list')?.replaceWith(fragment.querySelector('.wordbook-list'));return;}
   if(event.target.closest('#sync-panel') && event.target.name) syncFields[event.target.name]=event.target.value;
   if (event.target.classList.contains('task-text-answer')) {
@@ -745,13 +772,26 @@ app.addEventListener('change', event => {
   }
   if (event.target.id === 'audio-speed') { speed = Number(event.target.value); if (audioState !== 'idle') playAudio(true); }
 });
-app.addEventListener('submit', event => {
+app.addEventListener('submit', async event => {
   if(event.target.id==='sync-login-form') {
     event.preventDefault();const values=Object.fromEntries(new FormData(event.target));
     return run('正在验证邮箱…',async()=>{
       await syncAction('verify',values);syncFields.code='';
       notice='邮箱已验证。开启同步前可以先查看数据数量。';
     });
+  }
+  if (event.target.id === 'coach-chat-form') {
+    event.preventDefault();
+    const message = freeCoachMessage.trim(), chatGoal = coachFromPractice ? current()?.goal || goal : goal;
+    if (!message || busy) return;
+    if (coachAttempt?.message !== message || coachAttempt.goal !== chatGoal) coachAttempt = { message, goal: chatGoal, requestId: crypto.randomUUID() };
+    await run('教练正在回复…', async () => {
+      coachTurns = (await request('coach/chat', coachAttempt)).turns;
+      freeCoachMessage = '';
+      coachAttempt = null;
+    });
+    if (matchMedia('(pointer: fine)').matches) app.querySelector('#free-coach-message')?.focus({ preventScroll: true });
+    return;
   }
   if (event.target.id === 'chat-composer') { event.preventDefault(); app.querySelector(`[data-action="${isDiscussing(current(), draft) ? 'send-coach' : 'submit'}"]`)?.click(); return; }
   if (event.target.id === 'learning-plan-form') {
@@ -773,6 +813,11 @@ app.addEventListener('keydown', event => {
   const card = event.target.closest?.('[data-action][role="link"]');
   if (card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); card.click(); return; }
   if (!event.target.closest('.chat-session') || event.target.tagName !== 'TEXTAREA' || event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  if (event.target.id === 'free-coach-message') {
+    event.preventDefault();
+    event.target.form.requestSubmit();
+    return;
+  }
   if (event.target.classList.contains('task-text-answer')) {
     event.preventDefault();
     const fields = [...app.querySelectorAll('.task-text-answer')], index = fields.indexOf(event.target), next = fields[index + 1];
@@ -801,7 +846,8 @@ function scheduleFocusedField() {
 function updateViewport() {
   const viewport = window.visualViewport;
   const height = viewport?.height || window.innerHeight;
-  document.documentElement.style.setProperty('--app-height',`${height}px`);
+  const appHeight = windowsDesktop ? `calc(${height}px - var(--desktop-bar-height))` : `${height}px`;
+  document.documentElement.style.setProperty('--app-height',appHeight);
   if (!native) document.documentElement.classList.toggle('keyboard-open', window.innerHeight - height > 120 && document.activeElement?.matches?.('input,textarea'));
   scheduleFocusedField();
 }

@@ -7,6 +7,7 @@ import AVFoundation
     @Published var error=""
     @Published var notice=""
     @Published var practice=false
+    @Published var coachDraft=""
     @Published var goal=UserDefaults.standard.string(forKey:"native-goal") ?? "四级"
     @Published var tab=0
     @Published var showSwitch=false
@@ -85,6 +86,7 @@ extension StudyRuntime {
             let feedback:J = .object(["questions":.array(itemFeedback),"correct":.bool(skipped.isEmpty),"explanation":.s("隔离验收：已保存回答和不会标记。"),"suggestion":.s(""),"weakness":.s(skipped.isEmpty ? "":"未掌握本项")])
             var output:J = .object(task)
             if system.contains("connection-test") || context["action"].text=="connection-test"{output = .object(["ok":.bool(true)])}
+            else if context["conversation"].exists{output = .object(["reply":.s("隔离验收：可以先说说你最近对什么感兴趣。")])}
             else if system.contains("definitions"),!context["words"].list.isEmpty{output = .object(["definitions":.array(context["words"].list.map{.object(["word":$0["word"],"meaning":.s($0["word"].text=="plates" ? "盘子；餐盘":"桌子"),"translation":.s("盘子在厨房的桌子上。")])})])}
             else if system.contains("当前 goal 的通过概率"){output = .object(["probability":.number(12.23),"reason":.s("隔离验收：根据已有练习评估，样本有限。")])}
             else if system.contains("本次同时准备下一题"){output = .object(["feedback":feedback,"nextTask":.object(task)])}

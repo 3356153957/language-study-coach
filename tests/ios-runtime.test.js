@@ -52,6 +52,28 @@ function harness({stores=new Map(),http,native}={}) {
   let startupError;try{vm.runInContext(bundle,context);}catch(error){startupError=error;}
   return {request:context.studyRequest,context,stores,calls,cancelled,timers,startupError,set failWrites(value){failWrites=value;},close(){for(const timer of timers.values())clearTimeout(timer);}};
 }
+test('SwiftUI can chat before opening a round and reload the conversation after restart', async () => {
+  const h = harness({ http: async input => {
+    if (!input.url.endsWith('/chat/completions')) return null;
+    return { status: 200, headers: {}, body: JSON.stringify({ choices: [{ message: { content: '{"reply":"可以，今天就聊聊。"}' } }] }) };
+  } });
+  let restarted;
+  try {
+    await h.request('settings', { provider: 'compatible', baseURL: 'https://fixture.invalid/v1', apiKey: 'test-only', model: 'fixture' });
+    const before = await h.request('coach/chat', {});
+    assert.equal(before.turns.length, 0);
+    const requestId = crypto.randomUUID();
+    await assert.rejects(h.request('coach/chat', { requestId, message: '' }), /请输入/);
+    await h.request('coach/chat', { requestId, message: '今天想和教练聊聊。' });
+    restarted = harness({ stores: h.stores });
+    assert.equal((await restarted.request('coach/chat', {})).turns[0].reply, '可以，今天就聊聊。');
+    assert.equal((await restarted.request('state')).sessions.length, 0);
+  } finally {
+    h.close();
+    restarted?.close();
+  }
+});
+
 test('SwiftUI wordbook and manual assessment survive restart through the native bridge',async()=>{
   const h=harness({http:async input=>input.url.endsWith('/chat/completions') ? {status:200,headers:{},body:JSON.stringify({choices:[{message:{content:JSON.stringify({probability:12.23,reason:'原生引擎验收，样本存在局限。'})}}]})} : null});
   let restarted;

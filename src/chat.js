@@ -40,11 +40,40 @@ function answerText(task, value, skippedQuestions = []) {
   } catch { return value || ''; }
 }
 
+const chatRow = (role, label, body, esc, extra = '') => `<article class="chat-message ${role === 'user' ? 'from-user' : 'from-coach'}" ${extra}><span class="chat-avatar" aria-hidden="true">${role === 'user' ? '我' : 'L'}</span><div class="chat-message-content"><div class="chat-speaker">${esc(label)}</div><div class="chat-bubble">${body}</div></div></article>`;
+const chatText = (content, esc) => `<p class="chat-text">${esc(content)}</p>`;
+
+const starters = [
+  ['今天只想聊聊', '今天没什么动力，只想和你聊聊。'],
+  ['这些题我不想做', '最近出的题我不太想做，想聊聊怎么换个方式学。'],
+  ['用喜欢的话题练一句', '我想用自己感兴趣的话题练一句英语。'],
+];
+
+export function renderCoachConversation({ turns, message, pending, busy, configured, fromPractice, esc, button }) {
+  const user = value => chatRow('user', '你', chatText(value, esc), esc);
+  const coach = value => chatRow('coach', '英语教练', chatText(value, esc), esc);
+  return `<section class="chat-session coach-conversation"><header class="chat-session-header">
+    <div>${button(fromPractice ? '← 返回练习' : '← 学习', fromPractice ? 'session' : 'home', 'back-button')}<h1>和教练聊</h1></div>
+  </header>
+  <div class="chat-log" id="coach-log" role="log" aria-label="教练对话">
+    ${turns?.length ? turns.map(turn => user(turn.message) + coach(turn.reply)).join('') : coach('今天想聊什么？可以说说题目哪里没意思，也可以聊聊你最近感兴趣的事。想练的话，一句就够。')}
+    ${pending ? user(pending) : ''}
+    ${busy ? `<p class="chat-thinking" role="status"><span class="spinner"></span>${esc(busy)}</p>` : ''}
+  </div>
+  <div class="chat-bottom">${configured ? `<form id="coach-chat-form" class="chat-composer">
+    <div class="coach-starters" aria-label="聊天开场">${!turns?.length && !pending ? starters.map(([label, value]) => button(label, 'coach-starter', 'secondary-button', `data-value="${esc(value)}"`)).join('') : ''}</div>
+    <label class="sr-only" for="free-coach-message">给教练的消息</label>
+    <textarea id="free-coach-message" maxlength="2000" placeholder="想说什么，中文或英文都可以…" ${busy ? 'disabled' : ''}>${esc(message)}</textarea>
+    <div class="composer-tools"><span class="coach-chat-note">自由聊天 · 不计分</span><button type="submit" class="primary-button" ${busy || !message.trim() ? 'disabled' : ''}>发送 ↑</button></div>
+  </form>` : `<div class="chat-composer"><p>连接学习模型后，就可以直接和教练聊。</p>${button('去设置连接 AI', 'settings', 'secondary-button')}</div>`}</div>
+  </section>`;
+}
+
 export function renderLearningChat({ session: s, draft, busy, pendingChat, esc, button, audioState, voiceMessage, speed, recognition, usesChatGPT }) {
   if (!s) return `<div class="empty-state"><h2>没有正在进行的练习</h2>${button('回到学习页', 'home')}</div>`;
   const types = { choice: '选择题', text: '文字表达', conversation: '情境对话', listening: '听力练习' };
-  const row = (role, label, body, extra = '') => `<article class="chat-message ${role === 'user' ? 'from-user' : 'from-coach'}" ${extra}><span class="chat-avatar" aria-hidden="true">${role === 'user' ? '我' : 'L'}</span><div class="chat-message-content"><div class="chat-speaker">${esc(label)}</div><div class="chat-bubble">${body}</div></div></article>`;
-  const text = content => `<p class="chat-text">${esc(content)}</p>`;
+  const row = (role, label, body, extra) => chatRow(role, label, body, esc, extra);
+  const text = content => chatText(content, esc);
   function audio(task, active) {
     if (!task.audio) return '';
     if (!active) return `<details class="chat-material"><summary>听力原文</summary>${text(task.audio)}</details>`;
@@ -97,7 +126,7 @@ export function renderLearningChat({ session: s, draft, busy, pendingChat, esc, 
   const targetNumber = targetIndex < 0 ? s.history.length + 1 : targetIndex + 1;
   const progress = Math.min(s.history.length + (s.feedback ? 0 : 1), s.targetCount);
   return `<section class="session-page chat-session"><header class="chat-session-header"><div>${button('← 学习', 'home', 'back-button')}<h1>${esc(s.goal)} · ${s.placement ? '初步测评' : esc(modeName(s.mode)) + '练习'}</h1><span class="chat-progress">第 ${progress} / ${s.targetCount} 组</span></div>${button(s.history.length ? '结束并生成小结' : '结束本轮', 'finish', 'text-button')}</header>
-    <p class="field-help practice-timing"><span id="practice-timer">本题前台用时 ${Math.floor((draft.activeSeconds || 0)/60)} 分 ${(draft.activeSeconds || 0)%60} 秒</span> · ${button(draft.timerPaused ? '继续计时' : '暂停计时','timer-toggle','text-button')}<small>离开页面自动暂停；每题最多 30 分钟</small></p>
+    <div class="practice-subheader"><p class="field-help practice-timing"><span id="practice-timer">本题前台用时 ${Math.floor((draft.activeSeconds || 0)/60)} 分 ${(draft.activeSeconds || 0)%60} 秒</span> · ${button(draft.timerPaused ? '继续计时' : '暂停计时','timer-toggle','text-button')}<small>离开页面自动暂停；每题最多 30 分钟</small></p>${button('先和教练聊聊', 'open-coach', 'secondary-button')}</div>
     <div class="chat-log" id="chat-log" role="log" aria-label="学习对话" aria-live="polite" aria-relevant="additions">${events.map(event => event.html).join('')}</div>
     <div class="chat-bottom">${usesChatGPT?'<p class="subscription-note">正在使用 ChatGPT 订阅 <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">管理用量 ↗</a></p>':''}${s.feedback ? `<div class="chat-next-row"><span>${s.nextReady ? '下一题已准备好' : s.nextPreparationError || '回答已保存'}</span>${button(s.history.length >= s.targetCount ? '生成学习小结 →' : '继续下一题 →', s.history.length >= s.targetCount ? 'finish' : 'next', 'secondary-button')}</div>` : ''}
       <form id="chat-composer" class="chat-composer"><div class="composer-header"><div class="composer-modes" aria-label="输入用途">${!s.feedback ? `${button('作答', 'composer-answer', `composer-mode ${!discussing ? 'selected' : ''}`, `aria-pressed="${!discussing}"`)}${button('问教练', 'composer-coach', `composer-mode ${discussing ? 'selected' : ''}`, `aria-pressed="${discussing}"`)}` : '<strong>继续和教练聊</strong>'}</div><span>${discussing ? `讨论第 ${targetNumber} 题 · 中文或英文都可以` : '先想一想，再用英语回答'}</span></div>

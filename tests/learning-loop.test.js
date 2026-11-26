@@ -14,6 +14,49 @@ const entry = (id, at, correct=false, extra={}) => ({id,at,askedAt:at,task:task(
 const round = (id, history, extra={}) => ({id,goal:'高中英语',mode:'综合',targetCount:5,startedAt:history[0].at,finishedAt:history.at(-1).at,history,current:null,...extra});
 const config = {provider:'compatible',apiKey:'test-only'};
 
+test('free coach chat works before practice, resumes its context and saves without changing learning evidence', async () => {
+  let saved, failSave = false;
+  const contexts = [];
+  const engine = createEngine({
+    initialState: { version: 1, config, sessions: [] },
+    save: async value => {
+      if (failSave) throw Error('disk full');
+      saved = structuredClone(value);
+    },
+    modelCall: async (config, prompt, context) => {
+      if (prompt === prompts.next) return task('draft');
+      assert.equal(prompt, prompts.conversation);
+      contexts.push(context);
+      return { reply: '我们可以先聊聊你感兴趣的事。' };
+    },
+  });
+  const first = { requestId: crypto.randomUUID(), message: '今天没什么动力，只想聊聊。' };
+  const route = '/api/coach/chat';
+  assert.deepEqual(engine.coachChat().turns, []);
+  const { turns } = await engine.execute(route, first);
+  assert.equal(turns[0].goal, null);
+  assert.deepEqual(await engine.execute(route, first), { turns });
+  assert.equal(contexts.length, 1);
+  assert.equal(engine.view().sessions.length, 0);
+
+  await engine.execute('/api/session/start', { goal: '高中英语', mode: '综合' });
+  const before = engine.view({ compact: true });
+  const followUp = { requestId: crypto.randomUUID(), goal: '高中英语', message: '那用公路自行车练一句吧。' };
+  failSave = true;
+  await assert.rejects(engine.execute(route, followUp), /disk full/);
+  assert.deepEqual(engine.coachChat(), { turns });
+  failSave = false;
+  await engine.execute(route, followUp);
+  assert.deepEqual(engine.view({ compact: true }), before);
+  assert.equal(contexts.at(-1).conversation[0].message, first.message);
+  assert.equal(contexts.at(-1).currentPractice.skill, '语法');
+  assert.equal(contexts.at(-1).currentPractice.answer, undefined);
+
+  const restored = createEngine({ initialState: saved });
+  assert.equal(restored.coachChat().turns.at(-1).message, followUp.message);
+  assert.equal(JSON.stringify(restored.backup()).includes(followUp.message), false);
+});
+
 test('personal plans survive grading, reports, backup and cloud restore and reach the tutor for the selected goal', async()=>{
   let saved, lastContext, sequence=0;
   const engine=createEngine({initialState:{version:1,config,sessions:[]},save:async value=>{saved=structuredClone(value);},modelCall:async(c,p,ctx)=>{

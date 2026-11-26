@@ -73,6 +73,7 @@ export async function createAPI({ directory, modelCall, modelFetcher = fetch, co
         return res.end(`<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="1;url=${returnPath}"><title>ChatGPT 授权</title><h1>${message}</h1><p>正在返回 Language Study Coach…</p><script>setTimeout(()=>location.replace('${returnPath}'),250);</script></html>`);
       }
       if (req.method === 'GET' && route === '/api/state') return send(200, engine.view(viewOptions));
+      if (req.method === 'GET' && route === '/api/coach/chat') return send(200, engine.coachChat());
       if (req.method === 'GET' && route === '/api/session/detail') return send(200, engine.detail(url.searchParams.get('id')));
       if (req.method === 'GET' && route === '/api/profile') return send(200, engine.profile(viewOptions));
       if (req.method === 'GET' && route === '/api/activity') return send(200, engine.activity(url.searchParams.get('offset')));

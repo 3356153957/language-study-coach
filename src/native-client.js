@@ -63,6 +63,7 @@ export async function createNativeClient({ store = storage, deviceBridge = devic
   return { async request(path, body) {
     const url = new URL(path, 'https://local/'); path = url.pathname.slice(1);
     if (path === 'state' && body === undefined) return engine.view({ compact, timeZone });
+    if (path === 'coach/chat' && body === undefined) return engine.coachChat();
     if (path === 'profile' && body === undefined) return engine.profile({timeZone});
     if (path === 'activity' && body === undefined) return engine.activity(url.searchParams.get('offset'));
     if (path === 'session/detail' && body === undefined) return engine.detail(url.searchParams.get('id'));

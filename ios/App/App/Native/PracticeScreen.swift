@@ -75,6 +75,7 @@ struct PracticeScreen:View {
     @State private var discussionTaskID=""
     @State private var summary:J = .null
     @State private var showSummary=false
+    @State private var showCoach=false
     @State private var usedTranscript=false
     @State private var draftWarning=""
     @State private var draftSave:Task<Void,Never>?
@@ -86,6 +87,7 @@ struct PracticeScreen:View {
     var body:some View{
         lifecycle
             .sheet(isPresented:$showSummary,onDismiss:summaryDismissed){RoundDetail(round:summary)}
+            .sheet(isPresented:$showCoach){CoachConversationScreen(goal:session["goal"].text,fromPractice:true)}
             .alert("未能完成",isPresented:errorPresented){Button("知道了"){store.error=""}}message:{Text(store.error)}
     }
     var lifecycle:some View{
@@ -126,7 +128,11 @@ struct PracticeScreen:View {
     }
     @ToolbarContentBuilder var navigationControls:some ToolbarContent{
         ToolbarItem(placement:.navigationBarLeading){Button("学习"){dismiss()}}
-        ToolbarItem(placement:.navigationBarTrailing){Button("结束本轮",action:finish).disabled(!store.busy.isEmpty)}
+        ToolbarItemGroup(placement:.navigationBarTrailing){
+            Button{hideKeyboard();saveAndStop();showCoach=true}label:{Image(systemName:"bubble.left.and.text.bubble.right")}
+                .disabled(!store.busy.isEmpty).accessibilityLabel("先和教练聊聊").accessibilityIdentifier("open-coach-in-practice")
+            Button("结束本轮",action:finish).disabled(!store.busy.isEmpty)
+        }
     }
     var discussionCount:Int{session["discussions"][task.recordID].list.count}
     var errorPresented:Binding<Bool>{Binding(get:{!store.error.isEmpty},set:{if !$0{store.error=""}})}
@@ -141,7 +147,7 @@ struct PracticeScreen:View {
     func saveAndStop(){store.speech.stopSpeaking(at:.immediate);persistDraft(immediately:true)}
     func summaryDismissed(){if !store.current.exists{dismiss()}}
     func tick(){
-        if scenePhase == .active && !timerPaused && !session["feedback"].exists && store.busy.isEmpty{
+        if scenePhase == .active && !showCoach && !timerPaused && !session["feedback"].exists && store.busy.isEmpty{
             seconds=min(1800,seconds+1);if seconds%10==0{persistDraft()}
         }
     }

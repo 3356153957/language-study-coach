@@ -295,6 +295,23 @@ details[open].dash-panel { border-color:#b7c6af; }
 .chat-reason,.chat-material { border:1px solid var(--line); border-radius:10px; background:#fbfcf8; overflow:clip; }.chat-reason>summary,.chat-material>summary { padding:12px 14px; color:#5d7650; }.chat-reason[open]>summary,.chat-material[open]>summary { border-bottom:1px solid var(--line); }.chat-reason>p,.chat-material>p { padding:0 14px 12px; color:var(--muted); }
 .chat-revision { border-color:#9ebd86; background:#f1f6e9; }.chat-revision strong { color:#587449; }.chat-hint p { background:#f7f3e6; border:1px solid #e9dfbd; }.audio-panel { background:#edf3f1; border:1px solid #d4e2db; }.audio-glyph { color:#547c6f; }.audio-player { background:#fff; border-color:#cfdfd4; }.speed.active { color:#365b40; border-color:#94b087; background:#f2f7e9; }
 .chat-bottom { background:var(--paper); }.chat-composer { background:#fff; border:1px solid #c9d5c2; border-radius:14px; box-shadow:0 3px 10px #243c3404; }.chat-composer:focus-within { border-color:#718d61; box-shadow:0 0 0 3px #71905b12; }.chat-composer textarea { border:0; background:transparent; border-radius:6px; box-shadow:none; padding:8px 2px; }.chat-composer textarea:focus-visible { outline:0; }.composer-modes { border:1px solid var(--line); padding:3px; background:#f6f8f0; border-radius:9px; gap:2px; }.composer-mode { border:1px solid transparent; color:var(--muted); padding:6px 13px; min-height:32px; border-radius:6px; }.composer-mode.selected { background:white; color:var(--ink); border-color:#d8e1ce; }.composer-header>span { color:var(--muted); }.composer-header strong { color:var(--ink); }.composer-choice,.chat-next-row>span,.voice-status { color:var(--muted); }
+.coach-entry {
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:13px;
+  width:100%; padding:15px 18px; text-align:left; color:var(--ink);
+  border:1px solid var(--line); border-radius:14px; background:#f5f8ef;
+}
+.coach-entry:hover:not(:disabled) { background:#edf3e5; border-color:#a6b997; }
+.coach-entry strong,.coach-entry small { display:block; }
+.coach-entry small { margin-top:4px; color:var(--muted); font-size:12px; line-height:1.5; }
+.coach-entry-icon { display:grid; place-items:center; width:38px; height:38px; border-radius:10px; background:#e2ebd7; color:#365b40; }
+.coach-entry-icon .ui-icon { width:20px; height:20px; }
+.coach-conversation { grid-template-rows:auto minmax(0,1fr) auto; }
+.coach-starters,.practice-subheader { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; }
+.practice-subheader { justify-content:space-between; }
+.coach-starters .secondary-button,.practice-subheader .secondary-button { padding:6px 10px; min-height:36px; font-size:12px; }
+.coach-conversation .chat-composer>p { margin-bottom:10px; }
+.coach-chat-note { color:var(--muted); font-size:12px; }
+.keyboard-open .coach-starters { display:none; }
 .busy-banner { background:#eef3e6; border:1px solid #dbe6cf; color:#506a3f; }.spinner { border-color:#d3dfc5; border-top-color:#5e7b4b; }.alert { border-radius:12px; }.alert.success { background:#edf5e7; color:#496b3c; border:1px solid #d6e6c9; }.alert.error { background:#fdf0e9; color:#925439; border:1px solid #ebcdbb; }.alert button { color:inherit; }
 .first-practice { background:#f8faf3; }.first-practice h2 { font-size:16px; }.first-practice>p { margin:9px 0 16px; }
 .review-item details>summary { color:var(--violet); }

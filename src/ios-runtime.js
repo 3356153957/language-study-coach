@@ -40,6 +40,7 @@ const sync=createCloudSync({engine,defaultConfig:config.url?config:undefined,loa
 const options={compact:true,timeZone:__nativeTimeZone()};
 globalThis.studyRequest=async(path,body)=>{
   if(path==='state')return engine.view(options);
+  if(path==='coach/chat' && !Object.keys(body || {}).length)return engine.coachChat();
   if(path==='profile')return engine.profile(options);
   if(path==='activity')return engine.activity(body?.offset || 0);
   if(path==='review')return engine.review(body.goal,body.offset || 0,{...options,filter:body.filter});
